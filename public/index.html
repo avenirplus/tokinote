@@ -80,7 +80,7 @@ body.fd #memoStage{touch-action:none}
 #tools.min #toolsMini{display:flex;outline:2px solid var(--accent);background:var(--accent-soft)}
 #row2{display:flex;align-items:center;gap:2px}
 @media (min-width:1100px){ #tools{flex-direction:row} #row2{margin-left:6px;border-left:1px solid var(--line);padding-left:6px} }
-.tool{width:clamp(34px,calc((100vw - 52px)/10),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.tool{width:clamp(32px,calc((100vw - 52px)/11),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
 .tool small{font-size:10px;white-space:nowrap;color:var(--sub);margin-top:3px}
 .tool.on{background:var(--accent-soft);outline:2px solid var(--accent)}
 .sep{width:1px;height:38px;background:var(--line);margin:0 4px}
@@ -183,6 +183,13 @@ body.viewing #advTools{display:flex}
 .recbtn{width:96px;height:96px;border-radius:50%;background:#fff;border:6px solid #e11d48;color:#e11d48;font-size:40px;font-weight:900}
 .recbtn.on{background:#e11d48;color:#fff;animation:aupulse 1.2s infinite}
 .ov>.advimg{border:3px solid #0a9b5c;border-radius:8px;background:#fff;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.reactBig{position:fixed;left:50%;top:42%;z-index:80;pointer-events:none;text-align:center;transform:translate(-50%,-50%)}
+.reactBig .re{font-size:120px;line-height:1.1;filter:drop-shadow(0 6px 12px rgba(0,0,0,.25))}
+.reactBig .rt{font-size:34px;font-weight:900;color:#fff;background:rgba(229,0,45,.92);padding:6px 22px;border-radius:30px;margin-top:6px;white-space:nowrap}
+.ov>.pingRing{width:0;height:0}
+.ov>.pingRing::before,.ov>.pingRing::after{content:"";position:absolute;left:-40px;top:-40px;width:80px;height:80px;border-radius:50%;border:6px solid #ff3b30;animation:ping 1.3s ease-out 3}
+.ov>.pingRing::after{animation-delay:.4s}
+@keyframes ping{0%{transform:scale(.3);opacity:1}100%{transform:scale(1.8);opacity:0}}
 #btnAdv.on{background:#e7f7ef;outline:2px solid #0a9b5c}
 .lightbox{position:fixed;inset:0;z-index:70;background:rgba(10,15,25,.9);display:flex;align-items:center;justify-content:center}
 .lightbox img{max-width:96vw;max-height:92vh;border-radius:8px;background:#fff}
@@ -343,7 +350,7 @@ const STAMP_C = {o:'#e5002d', t:'#f08c00', x:'#2f6fe0'};
 const STAMP_ICON = {o:'⭕', t:'🔺', x:'❌'};
 const REASONS = ['計算ミス','読みまちがい','知らなかった','時間切れ'];
 const TOOLS = [['hand','✋','見る'],['pen','✏️','ペン'],['marker','🖍️','マーカー'],['eraser','🧽','消す'],
-  ['o','⭕','まる'],['t','🔺','おしい'],['x','❌','ばつ'],['region','🔲','問題わく'],['mask','⬛','穴うめ'],['gap','↕️','すきま']];
+  ['o','⭕','まる'],['t','🔺','おしい'],['x','❌','ばつ'],['region','🔲','問題わく'],['mask','⬛','穴うめ'],['gap','↕️','すきま'],['sticker','🌟','スタンプ']];
 const STORES = ['files','books','shared','learn','ink','meta'];
 
 const state = {
@@ -601,9 +608,10 @@ function mergeLearn(a, b){
     }
     out.marks[id] = [...map.values()].sort((x,y)=>x.d-y.d);
   }
+  const aw=new Map(); for(const x of [...(a.awards||[]), ...(b.awards||[])]) aw.set(x.id, x); if(aw.size) out.awards=[...aw.values()];
   return out;
 }
-const sameLearn = (a,b) => JSON.stringify(a?.marks||{})===JSON.stringify(b?.marks||{}) && (a?.lastPage||0)===(b?.lastPage||0);
+const sameLearn = (a,b) => JSON.stringify(a?.marks||{})===JSON.stringify(b?.marks||{}) && (a?.lastPage||0)===(b?.lastPage||0) && (a?.awards||[]).length===(b?.awards||[]).length;
 function mergeStats(a,b){
   const out={days:{...(a?.days||{})}, updated:Math.max(a?.updated||0,b?.updated||0)};
   for(const [d,v] of Object.entries(b?.days||{})){ const o=out.days[d]||{}; out.days[d]={o:Math.max(o.o||0,v.o||0),t:Math.max(o.t||0,v.t||0),x:Math.max(o.x||0,v.x||0),sec:Math.max(o.sec||0,v.sec||0)}; }
@@ -660,7 +668,7 @@ async function syncBookFromCloud(b){
     if(!local || (data.updated||0) > (local.updated||0)){ setAdvRec(b, p, {items:data.items||[], updated:data.updated||0}, false); changed=true; }
   }
   if(changed){ undoMain.length=0; redoMain.length=0; updUndo(); }
-  renderAdvBtn();
+  renderAdvBtn(); creditAwards(b);
 }
 async function syncCfgFromCloud(){
   if(!Cloud.db) return;
@@ -793,7 +801,7 @@ function drawItem(ctx, it, s){
     else if(it.m==='t'){ ctx.moveTo(x,y-r*.8); ctx.lineTo(x+r*.85,y+r*.65); ctx.lineTo(x-r*.85,y+r*.65); ctx.closePath(); }
     else { ctx.moveTo(x-r*.7,y-r*.7); ctx.lineTo(x+r*.7,y+r*.7); ctx.moveTo(x+r*.7,y-r*.7); ctx.lineTo(x-r*.7,y+r*.7); }
     ctx.stroke(); ctx.restore();
-  }
+  } else if(it.k==='st') drawSticker(ctx, it, s);
 }
 function drawAll(cv, items, s){ const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); s ??= cv.width/10000; for(const it of items) drawItem(ctx,it,s); }
 function segDist2(px,py,ax,ay,bx,by){ const dx=bx-ax, dy=by-ay; const l=dx*dx+dy*dy; let t=l?((px-ax)*dx+(py-ay)*dy)/l:0; t=Math.max(0,Math.min(1,t)); const x=ax+t*dx-px, y=ay+t*dy-py; return x*x+y*y; }
@@ -847,7 +855,7 @@ function onDown(e, el, T){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
   }
-  const tool = state.viewOnly ? ({apen:'pen', aerase:'eraser'}[state.advTool] || 'hand') : T.tool();
+  const tool = state.viewOnly ? ({apen:'pen', aerase:'eraser', astamp:'astamp', aping:'aping'}[state.advTool] || 'hand') : T.tool();
   if(state.viewOnly && T===memoT) return;   // メモは見るだけ
   const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
   if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
@@ -868,7 +876,7 @@ function startCur(e, el, T, tool){
     el.appendChild(live); scheduleLive();
   } else if(tool==='eraser'){
     cur={kind:'erase', id:e.pointerId, pointerType:e.pointerType, el, T, removed:[]}; eraseAt(cur, pt);
-  } else if(tool==='gap'||tool==='o'||tool==='t'||tool==='x'){
+  } else if(tool==='gap'||tool==='o'||tool==='t'||tool==='x'||tool==='sticker'||tool==='astamp'||tool==='aping'){
     // スタンプ・すきまは「指を離したとき」に決める（ピンチの1本目で押されないように）
     cur={kind:'tapTool', id:e.pointerId, pointerType:e.pointerType, el, T, tool, pt, x:e.clientX, y:e.clientY, moved:false};
   } else if((tool==='region'||tool==='mask') && T.rect){
@@ -905,7 +913,8 @@ function finishCur(c, cancel, ev){
   try{
     if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return; c.T.addStroke(c.item); }
     else if(c.kind==='erase'){ if(c.removed.length) c.T.commitErase(c.removed); }
-    else if(c.kind==='tapTool'){ if(cancel || c.moved || c.aborted) return; if(c.tool==='gap') c.T.gap?.(c.pt); else c.T.stamp?.(c.pt, c.tool, {clientX:c.x, clientY:c.y}); }
+    else if(c.kind==='tapTool'){ if(cancel || c.moved || c.aborted) return;
+      if(c.tool==='gap') c.T.gap?.(c.pt); else if(c.tool==='sticker'||c.tool==='astamp'||c.tool==='aping') c.T.sticker?.(c.pt, c.tool); else c.T.stamp?.(c.pt, c.tool, {clientX:c.x, clientY:c.y}); }
     else if(c.kind==='rect'){ c.rb.remove(); const r=normRect(c.x0,c.y0,c.last.x,c.last.y); if(!cancel && r.w>120 && r.h>80) c.T.rect(c.tool, r); }
   }catch(err){ console.warn(err); }
 }
@@ -941,7 +950,7 @@ function rectMap(f, g, r){ const a=f(g,r.x,r.y), b=f(g,r.x+r.w,r.y+r.h); return 
 const pageRot = p => ((state.shared?.rot?.[p])||0);
 function drawOnPage(ctx, items, g, k, ox=0, oy=0){
   for(const it of items){
-    if(it.k==='m'){ ctx.setTransform(k,0,0,k,-ox,-oy); const d=toD(g,it.x,it.y); drawItem(ctx, {...it, x:d.x, y:d.y}, 1); }
+    if(it.k==='m' || it.k==='st'){ ctx.setTransform(k,0,0,k,-ox,-oy); const d=toD(g,it.x,it.y); drawItem(ctx, {...it, x:d.x, y:d.y}, 1); }
     else { const m=g.m; ctx.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],k*m[4]-ox,k*m[5]-oy); drawItem(ctx, it, 1); }
   }
   ctx.setTransform(1,0,0,1,0,0);
@@ -1107,7 +1116,7 @@ function unrenderPage(pg){
   try{ pg.task?.cancel(); }catch{} pg.task=null; removeDetail(pg);
   pg.pdfCv.width=pg.pdfCv.height=0; pg.inkCv.width=pg.inkCv.height=0; pg.ov.innerHTML='';
 }
-const advItems = p => state.advHidden ? [] : (state.adv.get(p)?.items||[]).filter(it=>it.k==='s');
+const advItems = p => state.advHidden ? [] : (state.adv.get(p)?.items||[]).filter(it=>it.k==='s'||it.k==='st');
 const pageItems = p => { const a=advItems(p); const i=getInk(p).items; return a.length ? i.concat(a) : i; };
 function drawInk(pg){ if(!pg.rendered) return; const ctx=pg.inkCv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,pg.inkCv.width,pg.inkCv.height); drawOnPage(ctx, pageItems(pg.i), pg.g, pg.px); drawDetailInk(pg); }
 function renderOverlay(pg){
@@ -1173,6 +1182,11 @@ function pageTarget(pg){
     },
     stamp(pt, m, e){ stampAt(pg, pt, m, e); },
     gap(pt){ gapAt(pg, pt); },
+    sticker(pt, tool){
+      if(tool==='sticker') stickerAt(pg, pt);
+      else if(tool==='astamp') advStickerAt(pg, pt);
+      else if(tool==='aping'){ Live.send({t:'look', L:state.learner, b:state.book.id, p:pg.i, x:rnd(pt.x), y:rnd(pt.y)}); showPing(pg.i, pt.x, pt.y); }
+    },
     rect(kind, r){
       const b=state.book.id, sh=state.shared;
       if(pg.g.gaps?.length){ const y1=e2bc(pg.g,r.y), y2=e2bc(pg.g,r.y+r.h); if(y2-y1<80){ toast('すきまの中には作れません'); return; } r={...r, y:Math.round(y1), h:Math.round(y2-y1)}; }
@@ -1190,6 +1204,10 @@ function pageTarget(pg){
       }
     },
     tap(pt, e){
+      // 指でタップしたとき（Pencilの端末で指はスクロール用のとき）もスタンプ類は使えるように
+      if(state.viewOnly && state.advTool==='astamp'){ advStickerAt(pg, pt); return; }
+      if(state.viewOnly && state.advTool==='aping'){ this.sticker(pt,'aping'); return; }
+      if(!state.viewOnly && state.tool==='sticker'){ stickerAt(pg, pt); return; }
       if(state.viewOnly && state.advTool==='aaud'){ advAudioAt(pg, pt); return; }
       if(state.viewOnly && state.advTool==='alec'){ openLecRecorder(pg, pt); return; }
       if(state.viewOnly && state.advTool==='avid'){ advVideoAt(pg, pt); return; }
@@ -1320,13 +1338,15 @@ function renderTools(){
      PEN_W.map((w,i)=>`<button class="wd ${state.penW===i?'on':''}" data-pw="${i}"><i style="height:${2+i*2.5}px"></i></button>`).join('');
   else if(t==='marker') o.innerHTML = sw('mk', S.mkRecent, S.mk) +
      MK_W.map((w,i)=>`<button class="wd ${state.mkW===i?'on':''}" data-mw="${i}"><i style="height:${6+i*4}px;opacity:.5"></i></button>`).join('');
+  else if(t==='sticker') o.innerHTML = `<button class="pill" data-pick="1" style="font-size:${state.sticker.tx?14:24}px">${esc(state.sticker.e)}　えらぶ</button><div class="hint">タップではる・もう一度タップではがす</div>`;
   else o.innerHTML = `<div class="hint">${({hand:'指でスクロール。穴うめをタップで開く',eraser:'なぞった線を消す',o:'タップで押す。もう一度タップで取り消し',t:'タップで押す。もう一度タップで取り消し',x:'タップで押す。もう一度タップで取り消し',region:'1問ぶんを指やペンで囲むと「問題」として登録',mask:'かくしたい所を囲む。「見る」でタップすると開く',gap:'書くスペースがほしい所をタップ。すきまをタップで広さを変える'})[t]}</div>`;
   applyTouchMode(); renderToolsMin();
   if(state.book) state.pages.forEach(renderOverlay);
 }
 $('#tools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.tool){ state.tool=b.dataset.tool; renderTools(); store.put('meta','tool',state.tool).catch(()=>{}); }
+  if(b.dataset.tool){ const again=state.tool==='sticker' && b.dataset.tool==='sticker'; state.tool=b.dataset.tool; renderTools(); store.put('meta','tool',state.tool).catch(()=>{}); if(again) pickSticker(false).then(()=>renderTools()); }
+  else if(b.dataset.pick){ pickSticker(false).then(()=>renderTools()); }
   else if(b.dataset.col){ const [k,c]=b.dataset.col.split('|'); setColor(k,c); }
   else if(b.dataset.pal){ openPalette(b.dataset.pal); }
   else if(b.dataset.pw){ state.penW=+b.dataset.pw; renderTools(); }
@@ -1596,6 +1616,7 @@ async function openBook(id){
   state.ink=new Map(rows.map(([k,v])=>[+k.split('|')[2], v]));
   const arows=await store.range('ink', `adv|${state.learner}|${id}|`);
   state.adv=new Map(arows.map(([k,v])=>[+k.split('|')[3], v]));
+  setTimeout(()=>creditAwards(id), 500);
   buildPages(); renderTools();
   state.curPage=getLearn(id).lastPage||0; renderPageBtn();
   requestAnimationFrame(()=>scrollToPage(state.curPage));
@@ -1786,6 +1807,7 @@ function coinTotals(){
     if(marks.length && srsOf(marks).st==='grad') earned+=COIN.grad;
   }
   for(const d of Object.values(state.stats.days||{})) earned += Math.min(6, Math.floor((d.sec||0)/600))*10;
+  for(const l of state.learnAll.values()) for(const a of l.awards||[]) earned += a.c||0;   // 💮はなまるボーナス
   const spent=(state.rewards?.spent||[]).reduce((a,x)=>a+(x.cost||0),0);
   return {earned, spent, now:Math.max(0, earned-spent)};
 }
@@ -1980,7 +2002,9 @@ async function onLiveMsg(m){
   if(m.L && m.L!==state.learner) return;
   if(m.t==='liveEnd'){ clearViewLive(m.p); if(m.area==='memo' && state.memoOpen && memoPage===m.p) drawMemo(); return; }
   if(m.t==='live') armLiveClear(m.p);
-  if(m.t==='adv'){ setAdvRec(m.b, m.p, m.rec, true); return; }
+  if(m.t==='adv'){ setAdvRec(m.b, m.p, m.rec, true); creditAwards(m.b); return; }
+  if(m.t==='react'){ if(!state.viewOnly) showReaction(m.e, m.text); return; }
+  if(m.t==='look'){ if(!state.viewOnly && state.book?.id===m.b) showPing(m.p, m.x, m.y); else if(!state.viewOnly) toast('👆 おうちの人が「ここ見て」と言っています', 2600); return; }
   if(m.t==='live' && m.area==='adv'){
     if(state.viewOnly || state.advHidden || state.book?.id!==m.b || !m.item) return;
     const pg=state.pages[m.p]; if(!pg?.rendered) return;
@@ -2117,13 +2141,17 @@ $('#advImgFile').onchange=async e=>{
 function renderAdvTools(){
   const t=state.advTool;
   const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
-  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('aerase','🧽','消す')
+  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
+    + `<button class="tool" data-react="1">👏<small>リアクション</small></button>`
     + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
     + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
   document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.react){ sendReaction(); return; }
+  if(b.dataset.at==='astamp'){ pickSticker(true).then(ok=>{ if(ok){ state.advTool='astamp'; renderAdvTools(); toast(`${state.sticker.e} をはりたい場所をタップ`, 2000); } }); return; }
+  if(b.dataset.at==='aping') toast('👆 見てほしい場所をタップすると、子どもの画面でそこが光ります', 2600);
   if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
@@ -2494,6 +2522,107 @@ function vidBubble(pg, t){
     d.classList.remove('new'); openVideo(t);
   });
   return d;
+}
+
+
+/* ================= 🌟 スタンプ（いろいろ）・👏 リアクション・👆 ここ見て ================= */
+const STICKER_SETS = [
+  ['ほめる', ['💮','⭐','🌟','💯','👍','👏','🎉','🔥','✨','🏆','🥇','👑','🌈','🍀','💎','🎯']],
+  ['きもち', ['😀','😆','🥰','😎','🤔','😵','😢','😤','🙌','💪','❤️','💡','❓','❗','💤','😱']],
+  ['どうぶつ', ['🐶','🐱','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐸','🐧','🦄','🐢','🐬','🦖','🐝']],
+  ['しるし', ['✅','⚠️','📌','🔍','✏️','📝','⏰','🔁','➡️','⬅️','⬆️','⬇️','⭕','❌','🔺','➕']],
+  ['ことば', ['よくできました','すごい！','天才！','おしい！','もう一回','見直し！','ここ大事','がんばった','ていねい！','計算ミス注意','単位わすれ','式を書こう','図をかこう','ポイント！','あとでやる','わかった！']],
+];
+const STK_SIZES=[650, 950, 1350];
+const TEXT_STK_COLORS=['#e5002d','#1f5fd6','#0a9b5c','#f08c00','#7c3aed'];
+state.sticker = state.sticker || {e:'⭐', tx:false, c:'#e5002d'}; state.stkSize = state.stkSize ?? 1;
+function rrect(ctx,x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+function drawSticker(ctx, it, s){
+  const x=it.x*s, y=it.y*s, z=it.s*s; ctx.save(); ctx.textAlign='center'; ctx.textBaseline='middle';
+  if(it.tx){
+    ctx.font=`900 ${z*.4}px "Hiragino Maru Gothic ProN","Hiragino Sans","Noto Sans JP",sans-serif`;
+    const w=ctx.measureText(it.e).width+z*.5, h=z*.7, c=it.c||'#e5002d';
+    ctx.translate(x,y); ctx.rotate(-0.06);
+    rrect(ctx,-w/2,-h/2,w,h,h*.32); ctx.fillStyle='rgba(255,255,255,.94)'; ctx.fill(); ctx.lineWidth=z*.06; ctx.strokeStyle=c; ctx.stroke();
+    ctx.fillStyle=c; ctx.fillText(it.e,0,z*.02);
+  } else {
+    ctx.font=`${z}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`; ctx.fillText(it.e,x,y+z*.05);
+  }
+  if(it.award){ ctx.font=`800 ${z*.22}px sans-serif`; ctx.fillStyle='#b8860b'; ctx.fillText(`+${it.award}🪙`, x, y+z*.62); }
+  ctx.restore();
+}
+const stkHit = (it, pt) => it.k==='st' && Math.abs(it.x-pt.x) < (it.tx? it.s*1.6 : it.s*.6) && Math.abs(it.y-pt.y) < it.s*.5;
+async function pickSticker(forParent){
+  let tab=0;
+  const render=()=>`<h3>🌟 スタンプをえらぶ</h3>
+    <div class="row" style="margin-bottom:10px">${STICKER_SETS.map(([n],i)=>`<button class="chip ${i===tab?'on':''}" data-tab="${i}">${n}</button>`).join('')}</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(${tab===4?120:56}px,1fr));gap:6px;max-height:46vh;overflow:auto">
+      ${forParent && tab===0 ? `<button data-e="💮" data-award="10" style="grid-column:1/-1;padding:8px;border-radius:12px;background:#fff7e0;font-weight:800">💮 はなまる（子どもに +10🪙）</button>`:''}
+      ${STICKER_SETS[tab][1].map(e=>`<button data-e="${esc(e)}" style="padding:6px;border-radius:12px;background:#f6f7fa;font-size:${tab===4?15:30}px;font-weight:${tab===4?800:400}">${esc(e)}</button>`).join('')}</div>
+    ${tab===4?`<div class="row" style="margin-top:10px">色：${TEXT_STK_COLORS.map(c=>`<button class="sw ${state.sticker.c===c?'on':''}" data-c="${c}" style="background:${c}"></button>`).join('')}</div>`:''}
+    <div class="row" style="margin-top:12px">大きさ：${['小','中','大'].map((l,i)=>`<button class="chip ${state.stkSize===i?'on':''}" data-sz="${i}">${l}</button>`).join('')}</div>`;
+  return openSheet(render(), close=>{
+    const sh=$('#sheet');
+    const bind=()=>{
+      sh.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{ tab=+b.dataset.tab; sh.innerHTML=render(); bind(); });
+      sh.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ state.sticker.c=b.dataset.c; sh.innerHTML=render(); bind(); });
+      sh.querySelectorAll('[data-sz]').forEach(b=>b.onclick=()=>{ state.stkSize=+b.dataset.sz; sh.innerHTML=render(); bind(); });
+      sh.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>{ state.sticker={e:b.dataset.e, tx:tab===4, c:state.sticker.c||'#e5002d', award:+(b.dataset.award||0)}; close(true); });
+    };
+    bind();
+  });
+}
+function newSticker(pt){ const st=state.sticker; return {k:'st', id:uid('k'), e:st.e, tx:!!st.tx, c:st.c, x:rnd(pt.x), y:rnd(pt.y), s:STK_SIZES[state.stkSize]*(st.tx?.75:1), ...(st.award?{award:st.award}:{})}; }
+// 子ども：スタンプをはる（もう一度タップではがす）
+function stickerAt(pg, pt, e){
+  const p=pg.i, arr=getInk(p).items;
+  const near=[...arr].reverse().find(it=>stkHit(it,pt));
+  if(near){ const i=arr.indexOf(near); const redo=()=>{ const j=getInk(p).items.indexOf(near); if(j>=0) getInk(p).items.splice(j,1); drawInk(pg); saveInk(p); }; const undo=()=>{ getInk(p).items.splice(i,0,near); drawInk(pg); saveInk(p); }; redo(); pushUndo({undo,redo}); return; }
+  const it=newSticker(pt); delete it.award;
+  const redo=()=>{ getInk(p).items.push(it); drawInk(pg); saveInk(p); }; const undo=()=>{ const j=getInk(p).items.indexOf(it); if(j>=0) getInk(p).items.splice(j,1); drawInk(pg); saveInk(p); };
+  redo(); pushUndo({undo,redo});
+  if(state.settings.sound) tone(1320,0,.08,'triangle',.08);
+}
+// おうちの人：アドバイスとしてスタンプ（💮ははなまるボーナス）
+function advStickerAt(pg, pt){
+  const p=pg.i, arr=getAdv(p).items;
+  const near=[...arr].reverse().find(it=>stkHit(it,pt));
+  if(near){ advReplace(p, near, null); return; }
+  advReplace(p, null, newSticker(pt));
+}
+// 子ども側：はなまるボーナスを受け取る（同じスタンプで2回もらわない）
+function creditAwards(b){
+  if(state.viewOnly || state.book?.id!==b) return;
+  const learn=getLearn(b); learn.awards ||= []; const have=new Set(learn.awards.map(a=>a.id)); let add=0;
+  for(const r of state.adv.values()) for(const it of r.items||[]) if(it.award && !have.has(it.id)){ learn.awards.push({id:it.id, c:it.award, d:Date.now()}); add+=it.award; }
+  if(add){ saveLearn(b); showReaction('💮', `はなまる！ +${add}🪙`); updateCoins(); }
+}
+// 👏 リアクション（保存しない、その場だけ）
+const REACTIONS=[['👏','すごい！'],['💮','はなまる！'],['👍','いいね！'],['🎉','やったね！'],['🔥','がんばれ！'],['💪','ファイト！'],['❤️','だいすき'],['🤔','見なおしてみよう'],['☕','ひとやすみしよう']];
+async function sendReaction(){
+  const r=await openSheet(`<h3>👏 リアクションを送る</h3><div class="grid2">${REACTIONS.map(([e,t],i)=>`<button class="btn sub" data-i="${i}" style="height:60px;font-size:17px">${e} ${t}</button>`).join('')}</div>`,
+    close=>$('#sheet').querySelectorAll('[data-i]').forEach(b=>b.onclick=()=>close(+b.dataset.i)));
+  if(r==null) return; const [e,t]=REACTIONS[r];
+  Live.send({t:'react', L:state.learner, e, text:t}); toast(`${e} 「${t}」を送りました`, 1600);
+}
+function showReaction(e, text){
+  const d=document.createElement('div'); d.className='reactBig'; d.innerHTML=`<div class="re">${esc(e)}</div><div class="rt">${esc(text)}</div>`;
+  document.body.appendChild(d);
+  d.animate([{transform:'translate(-50%,-50%) scale(.3)',opacity:0},{transform:'translate(-50%,-50%) scale(1.15)',opacity:1,offset:.25},{transform:'translate(-50%,-50%) scale(1)',opacity:1,offset:.75},{transform:'translate(-50%,-60%) scale(1)',opacity:0}],{duration:2600,easing:'ease-out'}).onfinish=()=>d.remove();
+  confetti(innerWidth/2, innerHeight/2.4);
+  if(state.settings.sound){ tone(1047,0,.14); tone(1319,.1,.16); tone(1568,.2,.3); }
+}
+// 👆 ここ見て
+function showPing(p, x, y){
+  const pg=state.pages[p]; if(!pg) return;
+  const v=$('#viewer'), u=pg.w/pg.g.Dw, d=toD(pg.g, x, y);
+  const top=pg.el.offsetTop + d.y*u, left=pg.el.offsetLeft + d.x*u;
+  if(top < v.scrollTop+40 || top > v.scrollTop+v.clientHeight-140) v.scrollTo({top:top - v.clientHeight*.4, behavior:'smooth'});
+  if(left < v.scrollLeft || left > v.scrollLeft+v.clientWidth) v.scrollTo({left:left - v.clientWidth/2, behavior:'smooth'});
+  const show=()=>{ if(!pg.rendered){ setTimeout(show,200); return; }
+    const r=document.createElement('div'); r.className='pingRing'; r.style.cssText=`--x:${d.x};--y:${d.y}`; pg.ov.appendChild(r); setTimeout(()=>r.remove(), 4200); };
+  show();
+  if(state.settings.sound && !state.viewOnly){ tone(988,0,.1,'sine',.1); tone(988,.18,.1,'sine',.1); }
 }
 
 
