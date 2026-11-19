@@ -171,6 +171,10 @@ body.viewing #advTools{display:flex}
 .ov>.advau{width:auto;height:auto;pointer-events:auto;display:flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;border-radius:24px;
   background:#0a9b5c;color:#fff;font-weight:800;font-size:17px;box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer;transform:translate(-50%,-50%);touch-action:manipulation}
 .ov>.advau .ic{font-size:20px}
+.ov>.advau.lecb{background:#7c3aed}
+.recbtn.play{border-color:var(--accent);color:var(--accent);font-size:30px;width:72px;height:72px}
+#lec.hidden{display:none!important}
+#lecWrap{overflow:hidden}
 .ov>.advau.new{animation:aupulse 1.4s ease-in-out infinite}
 .ov>.advau.new::after{content:"NEW";font-size:10px;background:#ffd23f;color:#5a4300;border-radius:8px;padding:1px 5px;margin-left:2px}
 .ov>.advau.play{background:#e11d48}
@@ -283,6 +287,17 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <div id="pinDots"></div><div id="pinMsg"></div>
     <div class="keys"><button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><span></span><button data-k="0">0</button><button data-k="del" aria-label="1文字けす">⌫</button></div>
   </div>
+</section>
+
+<section id="lec" class="screen hidden" style="z-index:35;display:flex;flex-direction:column;overflow:hidden">
+  <div id="lecBar" class="mhead" style="cursor:default;flex-wrap:wrap;padding:8px 10px"></div>
+  <div id="lecWrap" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;touch-action:none">
+    <div id="lecStage" style="position:relative;background:#fff;box-shadow:0 1px 6px rgba(20,30,50,.2)">
+      <img id="lecBg" alt="" style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;pointer-events:none">
+      <canvas id="lecCv" style="position:absolute;left:0;top:0;touch-action:none"></canvas>
+    </div>
+  </div>
+  <div id="lecCtl" style="display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap;padding:10px 12px calc(12px + env(safe-area-inset-bottom));background:#fff;border-top:1px solid var(--line)"></div>
 </section>
 
 <div id="veil" class="hidden"><div id="sheet"></div></div>
@@ -1015,7 +1030,7 @@ function renderOverlay(pg){
     const d=document.createElement('img'); d.className='advimg'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
     d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--h:${t.h}`; d.alt='';
     imgURL(t.img).then(u=>{ if(u) d.src=u; }); ov.appendChild(d); }
-  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k==='au') ov.appendChild(audBubble(pg, t)); }
+  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k==='au') ov.appendChild(audBubble(pg, t)); if(t.k==='lec') ov.appendChild(lecBubble(pg, t)); }
 }
 function addDel(d, fn){ const x=document.createElement('div'); x.className='del'; x.textContent='×'; x.addEventListener('pointerdown', e=>{ e.stopPropagation(); e.preventDefault(); fn(); }); d.appendChild(x); }
 function removeShared(list, obj, p){
@@ -1078,6 +1093,7 @@ function pageTarget(pg){
     },
     tap(pt, e){
       if(state.viewOnly && state.advTool==='aaud'){ advAudioAt(pg, pt); return; }
+      if(state.viewOnly && state.advTool==='alec'){ openLecRecorder(pg, pt); return; }
       if(state.viewOnly && (state.advTool==='atext'||state.advTool==='aimg')){ advTextAt(pg, pt, e); return; }
       if(e && !state.advHidden){ const h=advHit(pg,e); if(h?.k==='im'){ imgURL(h.img).then(u=>u&&showLightbox(u)); return; } }
       const hit = state.shared.masks.filter(m=>m.p===p && pt.x>=m.x && pt.x<=m.x+m.w && pt.y>=m.y && pt.y<=m.y+m.h);
@@ -1916,7 +1932,7 @@ function setAdvRec(b, p, rec, notify){
   const pg=state.pages[p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } clearViewLive(p);
   if(notify && !state.viewOnly && (rec.items?.length||0)>before){
     const last=rec.items[rec.items.length-1];
-    toast(last?.k==='au' ? `🔊 音声のアドバイスがとどいたよ（${p+1}ページ）。タップで聞けます` : `💬 アドバイスがとどいたよ（${p+1}ページ）`, 3200);
+    toast(last?.k==='lec' ? `🎬 解説がとどいたよ（${p+1}ページ）。タップで見られます` : last?.k==='au' ? `🔊 音声のアドバイスがとどいたよ（${p+1}ページ）。タップで聞けます` : `💬 アドバイスがとどいたよ（${p+1}ページ）`, 3200);
     if(state.settings.sound){ tone(880,0,.15,'sine',.1); tone(1175,.12,.25,'sine',.1); }
     if(state.advHidden){ state.advHidden=false; state.pages.forEach(pg=>{ drawInk(pg); renderOverlay(pg); }); }
   }
@@ -1996,14 +2012,14 @@ $('#advImgFile').onchange=async e=>{
 function renderAdvTools(){
   const t=state.advTool;
   const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
-  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('aerase','🧽','消す')
+  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('aerase','🧽','消す')
     + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
     + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
   document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); renderAdvTools(); }
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
 });
@@ -2091,6 +2107,193 @@ async function advAudioAt(pg, pt){
   advReplace(pg.i, null, {k:'au', id:uid('a'), aud:id, mime, dur:r.dur, x:rnd(pt.x), y:rnd(pt.y)});
   toast('🔊 音声を送りました', 1600);
 }
+
+
+/* ================= 🎬 解説の録画（線の動き＋声）と再生 ================= */
+const LEC={mode:null, a:4/3*0+0.75, bg:null, bgImg:null, ev:[], cur:null, t0:0, rec:null, chunks:[], stream:null, mime:'', audioBlob:null, dur:0, timer:null, color:'#1d2330', target:null, play:null};
+const LEC_COLORS=['#1d2330','#e11d48','#1f5fd6','#0a9b5c','#ff5a00'];
+function lecNow(){ return LEC.t0 ? Math.round(performance.now()-LEC.t0) : 0; }
+function lecSize(){
+  const wrap=$('#lecWrap'); const W0=wrap.clientWidth-16, H0=wrap.clientHeight-16;
+  const W=Math.max(200, Math.min(W0, H0/LEC.a)), H=W*LEC.a;
+  const st=$('#lecStage'); st.style.width=W+'px'; st.style.height=H+'px';
+  const cv=$('#lecCv'); const r=pixelRatioFor(W,H); cv.width=Math.floor(W*r); cv.height=Math.floor(H*r); cv.style.width=W+'px'; cv.style.height=H+'px';
+  LEC.W=W;
+}
+// 時刻 T までの状態を描く（録画中は T=Infinity）
+function lecDraw(T=Infinity){
+  const cv=$('#lecCv'), ctx=cv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+  const s=cv.width/10000; let strokes=[];
+  for(const e of LEC.ev){
+    if(e.t>T) break;
+    if(e.k==='clear') strokes=[]; else if(e.k==='undo') strokes.pop();
+    else if(e.k==='s') strokes.push(e);
+  }
+  for(const e of strokes){
+    let p=e.p; if(T!==Infinity){ let n=0; while(n<p.length && p[n+2]<=T) n+=3; if(n<p.length) p=p.slice(0,n); }
+    if(!p.length) continue;
+    drawItem(ctx, {k:'s', t:'pen', c:e.c, w:e.w, p:p.map((v,i)=>i%3===2?50:v)}, s);
+  }
+}
+function lecTools(){
+  const recOn = LEC.rec?.state==='recording';
+  const done = !recOn && LEC.audioBlob!==null && LEC.mode==='rec';
+  if(LEC.mode==='play'){ $('#lecBar').innerHTML=`<button class="ib" data-l="close">✕</button><b>🎬 ${esc(LEC.play?.title||'解説')}</b>`; return; }
+  $('#lecBar').innerHTML = `<button class="ib" data-l="close">✕</button><b>🎬 解説を録る</b><div class="sp"></div>`
+    + (LEC.ev.length||recOn ? '' : `<button class="pill" data-l="bg">${LEC.bg?'📄 白紙にする':'📄 このページを下じきに'}</button>`)
+    + LEC_COLORS.map(c=>`<button class="sw ${LEC.color===c?'on':''}" data-c="${c}" style="background:${c}"></button>`).join('')
+    + `<button class="ib" data-l="undo">↶</button><button class="pill" data-l="clear">全部消す</button>`;
+  $('#lecCtl').innerHTML = done
+    ? `<button class="btn sub" data-l="redo">やり直す</button><button class="btn sub" data-l="preview">▶ 確かめる</button><button class="btn" data-l="send">送る（${fmtSec(LEC.dur/1000)}）</button>`
+    : `<button id="lecRec" class="recbtn ${recOn?'on':''}" data-l="rec">${recOn?'■':'●'}</button><div id="lecTime" style="font-size:22px;font-weight:800;min-width:70px">${fmtSec(recOn?lecNow()/1000:0)}</div>
+       <div class="note" style="max-width:260px">${recOn?'書きながら話してください（最大5分）。■で止める':'●を押すと、声と書いた線の録画が始まります'}</div>`;
+}
+async function openLecRecorder(pg, pt){
+  LEC.mode='rec'; LEC.target={p:pg.i, pt}; LEC.ev=[]; LEC.bg=null; LEC.a=0.75; LEC.audioBlob=null; LEC.dur=0; LEC.t0=0; LEC.color=state.advColor||'#1d2330';
+  $('#lecBg').removeAttribute('src'); $('#lec').classList.remove('hidden'); lecSize(); lecTools(); lecDraw();
+}
+async function lecSetBg(on){
+  if(!on){ LEC.bg=null; LEC.bgBuf=null; LEC.a=0.75; $('#lecBg').removeAttribute('src'); lecSize(); lecDraw(); lecTools(); return; }
+  const p=LEC.target.p; const page=await state.pdf.getPage(p+1); const rot=((page.rotate||0)+pageRot(p))%360;
+  const vp1=page.getViewport({scale:1, rotation:rot}); const vp=page.getViewport({scale:1400/vp1.width, rotation:rot});
+  const c=document.createElement('canvas'); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
+  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); await page.render({canvasContext:ctx, viewport:vp}).promise;
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8)); LEC.bgBuf=await blob.arrayBuffer();
+  LEC.bg=URL.createObjectURL(blob); LEC.a=c.height/c.width; $('#lecBg').src=LEC.bg; lecSize(); lecDraw(); lecTools();
+}
+async function lecStart(){
+  if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ toast('この画面では録音できません'); return; }
+  try{ LEC.stream=await navigator.mediaDevices.getUserMedia({audio:true}); }catch{ toast('マイクが使えません。設定でマイクを許可してください', 5000); return; }
+  LEC.mime=pickMime(); LEC.chunks=[]; LEC.ev=[];
+  LEC.rec=new MediaRecorder(LEC.stream, LEC.mime?{mimeType:LEC.mime}:undefined);
+  LEC.rec.ondataavailable=e=>{ if(e.data.size) LEC.chunks.push(e.data); };
+  LEC.rec.onstop=()=>{ LEC.audioBlob=new Blob(LEC.chunks,{type:LEC.rec.mimeType||LEC.mime||'audio/mp4'}); LEC.stream.getTracks().forEach(t=>t.stop()); lecTools(); };
+  LEC.rec.start(250); LEC.t0=performance.now(); lecDraw(); lecTools();
+  LEC.timer=setInterval(()=>{ const s=lecNow()/1000; const el=$('#lecTime'); if(el) el.textContent=fmtSec(s); if(s>=300) lecStop(); }, 250);
+}
+function lecStop(){ clearInterval(LEC.timer); if(LEC.cur){ LEC.ev.push(LEC.cur); LEC.cur=null; } LEC.dur=lecNow(); try{ LEC.rec?.state==='recording' && LEC.rec.stop(); }catch{} }
+// 書く（録画中だけ）
+(()=>{
+  const cv=$('#lecCv'); let id=null;
+  const pt=e=>{ const r=cv.getBoundingClientRect(), k=10000/LEC.W; return [rnd((e.clientX-r.left)*k), rnd((e.clientY-r.top)*k), lecNow()]; };
+  cv.addEventListener('pointerdown', e=>{
+    if(LEC.mode!=='rec') return;
+    if(LEC.rec?.state!=='recording'){ toast('●を押してから書いてね', 1500); return; }
+    if(e.pointerType==='touch' && state.settings.penSeen) return;   // Pencilがある端末では指はつかわない
+    e.preventDefault(); try{ cv.setPointerCapture(e.pointerId); }catch{} id=e.pointerId;
+    LEC.cur={k:'s', t:lecNow(), c:LEC.color, w:PEN_W[1], p:pt(e)};
+  });
+  cv.addEventListener('pointermove', e=>{
+    if(e.pointerId!==id || !LEC.cur) return; e.preventDefault();
+    const evs=e.getCoalescedEvents?.()||[]; for(const ev of (evs.length?evs:[e])){ const q=pt(ev), p=LEC.cur.p; if(Math.hypot(q[0]-p[p.length-3], q[1]-p[p.length-2])<8) continue; p.push(...q); }
+    const ctx=cv.getContext('2d'); lecDraw(); drawItem(ctx, {k:'s', t:'pen', c:LEC.cur.c, w:LEC.cur.w, p:LEC.cur.p.map((v,i)=>i%3===2?50:v)}, cv.width/10000);
+  });
+  const up=e=>{ if(e.pointerId!==id) return; id=null; if(LEC.cur){ LEC.ev.push(LEC.cur); LEC.cur=null; lecDraw(); } };
+  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
+  guardStylus($('#lecWrap'));
+})();
+$('#lecBar').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.c){ LEC.color=b.dataset.c; lecTools(); return; }
+  const a=b.dataset.l;
+  if(a==='close'){ lecClose(); }
+  else if(a==='bg'){ lecSetBg(!LEC.bg); }
+  else if(a==='undo'){ if(LEC.rec?.state==='recording') LEC.ev.push({k:'undo', t:lecNow()}); else LEC.ev.pop(); lecDraw(); }
+  else if(a==='clear'){ if(LEC.rec?.state==='recording') LEC.ev.push({k:'clear', t:lecNow()}); else LEC.ev=[]; lecDraw(); }
+});
+$('#lecCtl').addEventListener('click', async e=>{
+  const b=e.target.closest('button'); if(!b || LEC.mode!=='rec') return; const a=b.dataset.l;
+  if(a==='rec'){ if(LEC.rec?.state==='recording') lecStop(); else lecStart(); }
+  else if(a==='redo'){ LEC.audioBlob=null; LEC.ev=[]; LEC.t0=0; lecDraw(); lecTools(); }
+  else if(a==='preview'){ lecPlay({title:'確かめ', dur:LEC.dur, a:LEC.a, events:LEC.ev}, URL.createObjectURL(LEC.audioBlob), LEC.bg, true); }
+  else if(a==='send'){ await lecSend(); }
+});
+async function lecSend(){
+  const title=await promptDlg('解説の名前（なくてもOK）', `${state.book?.name||''} ${LEC.target.p+1}ページ`.trim());
+  if(title===null) return;
+  toast('解説を送っています…', 5000);
+  try{
+    const put=async(buf,mime)=>{ const id=await sha(buf); const r=await api(`api/blob/${id}?name=${encodeURIComponent(mime)}`,{method:'PUT', headers:{'content-type':mime}, body:buf}); if(!r.ok) throw 0; return id; };
+    const abuf=await LEC.audioBlob.arrayBuffer(); const mime=(LEC.audioBlob.type||'audio/mp4').split(';')[0];
+    const aud=await put(abuf, mime); await store.put('files','aud|'+aud, abuf);
+    let bg=null; if(LEC.bgBuf){ bg=await put(LEC.bgBuf,'image/jpeg'); await store.put('files','img|'+bg, LEC.bgBuf); }
+    const lid=uid('L'); const data={kind:'lec', id:lid, title:title.slice(0,60), dur:LEC.dur, a:LEC.a, aud, mime, bg, events:LEC.ev, updated:Date.now()};
+    const r=await api('api/kv?key='+encodeURIComponent('lec_'+lid),{method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify(data)});
+    if(!r.ok) throw 0;
+    await store.put('ink','lec|'+lid, data);
+    const {p, pt}=LEC.target;
+    advReplace(p, null, {k:'lec', id:uid('a'), lec:lid, title:data.title, dur:Math.round(LEC.dur/1000), x:rnd(pt.x), y:rnd(pt.y)});
+    toast('🎬 解説を送りました', 2000); lecClose(true);
+  }catch(err){ console.warn(err); toast('送れませんでした。電波を確かめて、もう一度「送る」を押してください', 5000); }
+}
+function lecClose(force){
+  if(LEC.mode==='rec' && !force && (LEC.ev.length || LEC.rec?.state==='recording')){
+    confirmDlg('解説をやめる','録画した内容は送られずに消えます。','やめる',true).then(ok=>{ if(ok) lecClose(true); }); return;
+  }
+  try{ LEC.rec?.state==='recording' && LEC.rec.stop(); }catch{} clearInterval(LEC.timer);
+  try{ LEC.stream?.getTracks().forEach(t=>t.stop()); }catch{}
+  if(LEC.play){ LEC.play.audio?.pause(); cancelAnimationFrame(LEC.play.raf); }
+  LEC.mode=null; LEC.play=null; $('#lec').classList.add('hidden');
+}
+// 再生
+async function openLecture(it){
+  let d=await store.get('ink','lec|'+it.lec);
+  if(!d && Cloud.mode==='cf'){ d=await Cloud.get('lec_'+it.lec); if(d) store.put('ink','lec|'+it.lec, d).catch(()=>{}); }
+  if(!d){ toast('解説を読みこめませんでした'); return; }
+  const au=await audURL({aud:d.aud, mime:d.mime}); const bg=d.bg ? await imgURL(d.bg) : null;
+  if(!state.viewOnly) markHeard(it.id);
+  lecPlay(d, au, bg, false);
+}
+function lecPlay(d, audioUrl, bgUrl, preview){
+  if(LEC.play){ LEC.play.audio?.pause(); cancelAnimationFrame(LEC.play.raf); }
+  const keepRec = preview ? {mode:LEC.mode, ev:LEC.ev, a:LEC.a, bg:LEC.bg} : null;
+  LEC.mode='play'; LEC.ev=d.events; LEC.a=d.a||0.75;
+  $('#lec').classList.remove('hidden');
+  if(bgUrl) $('#lecBg').src=bgUrl; else $('#lecBg').removeAttribute('src');
+  lecSize();
+  const audio=audioUrl ? new Audio(audioUrl) : null; const dur=(d.dur||0)/1000;
+  const P=LEC.play={audio, raf:0, rate:1, title:d.title, t:0, clock:null, keepRec};
+  lecTools();
+  $('#lecCtl').innerHTML=`<button class="ib" data-p="back">⏪10</button><button class="recbtn play" data-p="pp">▶</button>
+    <input type="range" id="lecSeek" min="0" max="${Math.max(1,dur)}" step="0.1" value="0" style="flex:1;min-width:120px">
+    <span id="lecT" style="font-weight:800;min-width:96px">0:00 / ${fmtSec(dur)}</span><button class="pill" data-p="rate">1倍</button>
+    ${preview?'<button class="btn" data-p="backrec">録画にもどる</button>':''}`;
+  const now=()=> audio ? audio.currentTime : (P.clock ? (performance.now()-P.clock)/1000*P.rate + P.t : P.t);
+  const tick=()=>{ const t=now(); lecDraw(t*1000); const s=$('#lecSeek'); if(s && document.activeElement!==s) s.value=t; const tt=$('#lecT'); if(tt) tt.textContent=`${fmtSec(Math.min(t,dur))} / ${fmtSec(dur)}`;
+    if(t>=dur && !audio){ P.t=dur; P.clock=null; setPP(false); return; } P.raf=requestAnimationFrame(tick); };
+  const setPP=on=>{ const b=$('#lecCtl [data-p=pp]'); if(b){ b.textContent=on?'❚❚':'▶'; } };
+  const play=async()=>{ if(audio){ try{ await audio.play(); }catch{ toast('音声を再生できませんでした'); } } else { P.clock=performance.now(); } setPP(true); cancelAnimationFrame(P.raf); tick(); };
+  const pause=()=>{ if(audio) audio.pause(); else { P.t=now(); P.clock=null; } setPP(false); };
+  if(audio){ audio.onended=()=>setPP(false); }
+  $('#lecCtl').onclick=e=>{
+    const b=e.target.closest('button'); if(!b) return; const a=b.dataset.p;
+    if(a==='pp'){ const playingNow = audio ? !audio.paused : !!P.clock; playingNow ? pause() : play(); }
+    else if(a==='back'){ if(audio) audio.currentTime=Math.max(0,audio.currentTime-10); else P.t=Math.max(0,now()-10), P.clock=P.clock&&performance.now(); lecDraw(now()*1000); }
+    else if(a==='rate'){ P.rate = P.rate===1?1.5:P.rate===1.5?2:1; if(audio) audio.playbackRate=P.rate; b.textContent=P.rate+'倍'; }
+    else if(a==='backrec'){ pause(); cancelAnimationFrame(P.raf); const k=P.keepRec; LEC.play=null; LEC.mode=k.mode; LEC.ev=k.ev; LEC.a=k.a; if(k.bg) $('#lecBg').src=k.bg; else $('#lecBg').removeAttribute('src'); lecSize(); lecDraw(); lecTools(); $('#lecCtl').onclick=null; }
+  };
+  $('#lecSeek').oninput=e=>{ const t=+e.target.value; if(audio) audio.currentTime=t; else { P.t=t; if(P.clock) P.clock=performance.now(); } lecDraw(t*1000); };
+  lecDraw(0); play();
+}
+// 再生画面の下のボタン（録画用のハンドラを再生中は外す）
+function lecBubble(pg, t){
+  const d=document.createElement('div'); d.className='advau lecb'+(!state.viewOnly && !heard.has(t.id)?' new':''); d.dataset.id=t.id;
+  const pt=toD(pg.g,t.x,t.y); d.style.cssText=`--x:${pt.x};--y:${pt.y}`;
+  d.innerHTML=`<span class="ic">🎬</span><span>${esc(t.title||'解説')} ${fmtSec(t.dur||0)}</span>`;
+  d.addEventListener('pointerdown', e=>e.stopPropagation());
+  d.addEventListener('click', async e=>{
+    e.stopPropagation();
+    if(state.viewOnly && state.advTool!=='hand'){
+      const r=await openSheet(`<h3>🎬 ${esc(t.title||'解説')}</h3><div class="grid2"><button class="btn sub" data-a="play">▶ 見る</button><button class="btn red" data-a="del">けす</button></div>`,
+        close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+      if(r==='play') openLecture(t); else if(r==='del') advReplace(pg.i, t, null); return;
+    }
+    d.classList.remove('new'); openLecture(t);
+  });
+  return d;
+}
+// ボタンの段の高さが変わっても、ボードが画面に収まるように合わせ直す
+new ResizeObserver(()=>{ if(LEC.mode){ lecSize(); lecDraw(LEC.play ? ((LEC.play.audio?.currentTime ?? LEC.play.t)||0)*1000 : Infinity); } }).observe($('#lecWrap'));
 
 
 /* ================= boot ================= */
