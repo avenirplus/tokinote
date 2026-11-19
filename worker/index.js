@@ -133,6 +133,22 @@ export class Family extends DurableObject {
       }
       return json(out);
     }
+    // 大きいファイル（動画）は1MBずつ受け取る：PUT part → POST done
+    const part = path.match(/^\/api\/blob\/([a-f0-9]{8,64})\/part\/(\d{1,4})$/);
+    if (part && request.method === 'PUT') {
+      const buf = new Uint8Array(await request.arrayBuffer());
+      if (!buf.length || buf.length > 2 * CHUNK) return json({ ok: false, error: 'bad_part' }, 400);
+      this.sql.exec(`INSERT INTO blob(id,idx,data) VALUES(?,?,?) ON CONFLICT(id,idx) DO UPDATE SET data=excluded.data`, part[1], +part[2], buf);
+      return json({ ok: true });
+    }
+    const done = path.match(/^\/api\/blob\/([a-f0-9]{8,64})\/done$/);
+    if (done && request.method === 'POST') {
+      const id = done[1], parts = +(url.searchParams.get('parts') || 0), size = +(url.searchParams.get('size') || 0);
+      const r = this.sql.exec(`SELECT count(*) AS n, coalesce(sum(length(data)),0) AS bytes, coalesce(max(idx),-1) AS mx FROM blob WHERE id=?`, id).toArray()[0];
+      if (r.n !== parts || r.bytes !== size || r.mx !== parts - 1) return json({ ok: false, error: 'incomplete', have: r.n, bytes: r.bytes }, 409);
+      this.sql.exec(`INSERT INTO bloblen(id,size,name,updated) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET size=excluded.size, name=excluded.name, updated=excluded.updated`, id, size, (url.searchParams.get('name') || '').slice(0, 200), Date.now());
+      return json({ ok: true });
+    }
     // PDF本体
     const pm = path.match(/^\/api\/(?:pdf|blob)\/([a-f0-9]{8,64})$/);   // PDF と、アドバイスの画像
     if (pm) {
@@ -141,9 +157,22 @@ export class Family extends DurableObject {
         const m = this.sql.exec(`SELECT size,name FROM bloblen WHERE id=?`, id).toArray();
         if (!m.length) return new Response(null, { status: 404 });
         if (request.method === 'HEAD') return new Response(null, { headers: { 'content-length': String(m[0].size) } });
-        const out = new Uint8Array(m[0].size); let off = 0;
-        for (const r of this.sql.exec(`SELECT data FROM blob WHERE id=? ORDER BY idx`, id)) { const d = new Uint8Array(r.data); out.set(d, off); off += d.length; }
-        return new Response(out, { headers: { 'content-type': path.startsWith('/api/blob/') ? 'image/jpeg' : 'application/pdf', 'cache-control': 'private, max-age=0' } });
+        // 1MBずつ順に流す（大きい動画でもメモリを使いすぎない）
+        const idxs = this.sql.exec(`SELECT idx FROM blob WHERE id=? ORDER BY idx`, id).toArray().map(r => r.idx);
+        const sql = this.sql; let i = 0;
+        const body = new ReadableStream({
+          pull(ctrl) {
+            if (i >= idxs.length) { ctrl.close(); return; }
+            const r = sql.exec(`SELECT data FROM blob WHERE id=? AND idx=?`, id, idxs[i++]).toArray()[0];
+            ctrl.enqueue(new Uint8Array(r.data));
+          },
+        });
+        const type = /^(audio|video|image)\//.test(m[0].name || '') ? m[0].name : path.startsWith('/api/blob/') ? 'application/octet-stream' : 'application/pdf';
+        return new Response(body, { headers: { 'content-type': type, 'content-length': String(m[0].size), 'cache-control': 'private, max-age=0' } });
+      }
+      if (request.method === 'DELETE') {
+        this.ctx.storage.transactionSync(() => { this.sql.exec(`DELETE FROM blob WHERE id=?`, id); this.sql.exec(`DELETE FROM bloblen WHERE id=?`, id); });
+        return json({ ok: true });
       }
       if (request.method === 'PUT') {
         const len = +(request.headers.get('content-length') || 0);
