@@ -34,7 +34,7 @@ button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-
 #stats{font-size:13px;color:var(--sub);white-space:nowrap}
 .sp{flex:1}
 #cloud{font-size:12px;color:var(--sub);white-space:nowrap}
-@media (max-width:900px){ #btnZoomOut,#btnZoomIn{display:none} }
+@media (max-width:900px){ #btnZoomOut,#btnZoomIn{display:none} #top{flex-wrap:nowrap;gap:3px} #stats{min-width:0;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto} #top .ib{min-width:38px} #top .pill{padding:0 9px} }
 #viewer{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
 #pages{display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 12px 140px;min-width:100%;width:max-content;box-sizing:border-box}
 .page{position:relative;background:#fff;box-shadow:0 1px 4px rgba(20,30,50,.18);flex:none;touch-action:pan-x pan-y}
@@ -167,6 +167,17 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
 #qBar.hidden{display:none}
+@media (max-width:900px){ #btnAsk .lbl{display:none} }
+#ansPanel{position:fixed;z-index:800;background:#fff;box-shadow:0 0 18px rgba(0,0,0,.25);display:flex;flex-direction:column}
+#ansPanel[data-side=right]{top:60px;right:0;bottom:var(--ansb,90px);border-bottom-left-radius:10px;width:min(46vw,620px);border-left:3px solid #1f6feb}
+#ansPanel[data-side=bottom]{left:0;right:0;bottom:var(--ansb,90px);height:42vh;border-top:3px solid #1f6feb}
+#ansPanel.hidden{display:none}
+#ansPanel .ansHead{display:flex;align-items:center;gap:2px;padding:4px 6px;background:#eaf2ff;flex-wrap:wrap;font-size:14px}
+#ansPanel .ansHead .s{font-size:11px;color:var(--sub)}
+#ansPanel .ansHead .ib{width:34px;height:34px;font-size:15px}
+#ansBody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:6px;background:#f4f6f9}
+#ansBody canvas{display:block;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+body.ansOpen #btnAns{background:#dbe8ff}
 body.hasQ #app,body.hasQ .screen{top:var(--qh,52px)}
 #viewFollow.on{background:var(--accent);color:#fff}
 #advTools{display:none;position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
@@ -183,7 +194,18 @@ body.viewing #advTools{display:flex}
 .ov>.advau.vidb{background:#0f172a}
 .recbtn.play{border-color:var(--accent);color:var(--accent);font-size:30px;width:72px;height:72px}
 #lec.hidden{display:none!important}
-#lecWrap{overflow:hidden}
+#lecWrap{overflow:hidden;position:relative}
+#lecStage{will-change:transform}
+#lecBar{gap:6px!important}
+#lecBar .lecTools{display:flex;align-items:center;gap:2px;flex-wrap:wrap}
+#lecBar .tool{width:52px;padding:4px 0}
+#lecBar .wbtn{width:34px;height:34px;display:flex;align-items:center;justify-content:center;border-radius:10px}
+#lecBar .wbtn span{display:block;width:20px;background:#1d2330;border-radius:4px}
+#lecBar .wbtn.on{background:var(--accent-soft);outline:2px solid var(--accent)}
+#lecSel{position:absolute;border:2px dashed #1f6feb;background:rgba(31,111,235,.06);border-radius:6px;cursor:move;touch-action:none;z-index:3}
+#lecSel .lsH{position:absolute;right:-12px;bottom:-12px;width:24px;height:24px;border-radius:50%;background:#1f6feb;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:nwse-resize}
+#lecSel .lsbar{position:absolute;left:0;top:-46px;display:flex;gap:4px;transform-origin:0 100%;white-space:nowrap}
+#lecSel .lsbar button{background:#fff;border-radius:10px;padding:6px 10px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.25);font-size:14px}
 .ov>.advau.new{animation:aupulse 1.4s ease-in-out infinite}
 .ov>.advau.new::after{content:"NEW";font-size:10px;background:#ffd23f;color:#5a4300;border-radius:8px;padding:1px 5px;margin-left:2px}
 .ov>.advau.play{background:#e11d48}
@@ -218,6 +240,9 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 </head>
 <body>
 <div id="qBar" class="hidden"></div>
+<div id="ansPanel" class="hidden" data-side="right"><div class="ansHead"><span id="ansTitle">📖 答え</span><div class="sp"></div>
+  <button class="ib" data-an="prev">◀</button><button class="ib" data-an="next">▶</button><button class="ib" data-an="ok" title="このページの答えとして覚える">📌</button><button class="ib" data-an="out">−</button><button class="ib" data-an="in">＋</button><button class="ib" data-an="side" title="右／下に切りかえ">⇆</button><button class="ib" data-an="set" title="答えの場所を設定しなおす">⚙︎</button><button class="ib" data-an="x">✕</button></div>
+  <div id="ansBody"></div></div>
 <div id="app" class="hidden">
   <header id="top">
     <button id="btnLib" class="ib" aria-label="本棚">📚</button>
@@ -228,7 +253,8 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnZoomOut" class="ib" aria-label="小さく">－</button>
     <button id="btnZoomIn" class="ib" aria-label="大きく">＋</button>
     <button id="btnPage" class="pill">1 / 1</button>
-    <button id="btnAsk" class="pill hidden" style="background:#fff3c4">🙋 しつもん</button>
+    <button id="btnAns" class="ib" aria-label="答え">📖</button>
+    <button id="btnAsk" class="pill hidden" style="background:#fff3c4">🙋<span class="lbl"> しつもん</span></button>
     <button id="btnAdv" class="ib hidden" aria-label="アドバイスの表示">💬</button>
     <button id="btnMemo" class="ib" aria-label="計算メモ">📝</button>
     <button id="btnCoin" class="pill">🪙 <span id="coinNum">0</span></button>
@@ -327,6 +353,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 
 <div id="veil" class="hidden"><div id="sheet"></div></div>
 <div id="toast"></div>
+<input type="file" id="lecImgFile" accept="image/*" hidden>
 <input type="file" id="filePdf" accept="application/pdf,.pdf" multiple hidden>
 <input type="file" id="fileJson" accept="application/json,.json" hidden>
 <input type="file" id="advImgFile" accept="image/*" hidden>
@@ -538,10 +565,10 @@ const Live = {
   // 書き終えたら、まだ送っていない「途中の線」を捨て、終わりの合図を送る（遅れて届いた途中の線が残るのを防ぐ）
   endLive(info){
     clearTimeout(this.timer); this.timer=null; this.pending=null;
-    if(info && this.open && (!state.viewOnly || info.area==='adv')) this.send({t:'liveEnd', L:state.learner, b:state.book?.id, ...info});
+    if(info && this.open && (!state.viewOnly || info.area==='adv' || info.area==='amemo')) this.send({t:'liveEnd', L:state.learner, b:state.book?.id, ...info});
   },
   sendLive(m){
-    if(!this.open || (state.viewOnly && m.area!=='adv')) return;
+    if(!this.open || (state.viewOnly && m.area!=='adv' && m.area!=='amemo')) return;
     this.pending=m; const now=Date.now();
     if(now-this.lastSend>=80){ this.lastSend=now; this.send(m); this.pending=null; }
     else if(!this.timer) this.timer=setTimeout(()=>{ this.timer=null; if(this.pending){ this.lastSend=Date.now(); this.send(this.pending); this.pending=null; } }, 80);
@@ -559,7 +586,7 @@ function renderCloud(){
 /* ================= data: records ================= */
 const learnKey = (b, L=state.learner) => `${L}|${b}`;
 const inkKey = (b, p, L=state.learner) => `${L}|${b}|${p}`;
-const emptyShared = (name='', pages=0) => ({name, pages, problems:[], masks:[], rot:{}, updated:0});
+const emptyShared = (name='', pages=0) => ({name, pages, problems:[], masks:[], rot:{}, ans:{b:undefined, map:{}}, updated:0});
 const emptyLearn = () => ({marks:{}, lastPage:0, updated:0});
 
 async function loadAllForLearner(){
@@ -655,7 +682,7 @@ async function syncLearnerFromCloud(){
   const sh = await Cloud.list('', ['kind','==','shared']);
   for(const {data} of sh){
     const b=data.book, local=state.sharedAll.get(b);
-    if(!local || (data.updated||0) > (local.updated||0)){ const v={name:data.name, pages:data.pages, problems:data.problems||[], masks:data.masks||[], rot:data.rot||{}, updated:data.updated||0}; state.sharedAll.set(b,v); store.put('shared',b,v).catch(()=>{}); }
+    if(!local || (data.updated||0) > (local.updated||0)){ const v={name:data.name, pages:data.pages, problems:data.problems||[], masks:data.masks||[], rot:data.rot||{}, ans:data.ans||{map:{}}, updated:data.updated||0}; state.sharedAll.set(b,v); store.put('shared',b,v).catch(()=>{}); }
     else if((local.updated||0) > (data.updated||0)) Cloud.put(`sh_${b}`, {...local, kind:'shared', book:b});
   }
   refreshDue(); updateCoins(); if(state.screen==='lib') renderLib(); if(state.book) state.pages.forEach(renderOverlay);
@@ -682,7 +709,7 @@ async function syncBookFromCloud(b){
   if(state.book?.id!==b || state.learner!==L) return;
   for(const {id, data} of adocs){
     const p=+id.slice(1); if(!Number.isFinite(p)) continue; const local=state.adv.get(p);
-    if(!local || (data.updated||0) > (local.updated||0)){ setAdvRec(b, p, {items:data.items||[], updated:data.updated||0}, false); changed=true; }
+    if(!local || (data.updated||0) > (local.updated||0)){ setAdvRec(b, p, {items:data.items||[], memo:data.memo||[], updated:data.updated||0}, false); changed=true; }
   }
   if(changed){ undoMain.length=0; redoMain.length=0; updUndo(); }
   renderAdvBtn(); creditAwards(b);
@@ -872,8 +899,8 @@ function onDown(e, el, T){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
   }
-  const tool = state.viewOnly ? ({apen:'pen', aerase:'eraser', astamp:'astamp', aping:'aping'}[state.advTool] || 'hand') : T.tool();
-  if(state.viewOnly && T===memoT) return;   // メモは見るだけ
+  const tool = T.lecTool ? T.lecTool() : state.viewOnly ? ({apen:'pen', aerase:'eraser', astamp:'astamp', aping:'aping', agap:'gap'}[state.advTool] || 'hand') : T.tool();
+  if(state.viewOnly && T===memoT && !['pen','eraser'].includes(tool)){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
   const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
   if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
   if(cur || !T.canDraw()) return;
@@ -887,7 +914,9 @@ function startCur(e, el, T, tool){
     const mk = tool==='marker';
     const item={k:'s', t:mk?'mk':'pen', c: mk ? state.settings.mk : state.settings.pen, w: mk ? MK_W[state.mkW] : PEN_W[state.penW], p:[rnd(pt.x),rnd(pt.y),pressureOf(e)]};
     if(T.forceColor) item.c=T.forceColor;
-    if(state.viewOnly){ item.c=state.advColor; item.t='pen'; item.w=PEN_W[1]; item.adv=1; }
+    if(T.style){ const st=T.style(mk); item.c=st.c; item.w=st.w; }
+    else if(state.viewOnly){ item.c=state.advColor; item.t='pen'; item.w=PEN_W[1]; item.adv=1; }
+    T.onStart?.();
     cur={kind:'stroke', id:e.pointerId, pointerType:e.pointerType, el, T, item, k: T.unitsPerPx ? T.unitsPerPx() : 10000/T.getW()};
     if(T.liveSetup) T.liveSetup(live); else { const ic=T.inkCanvas(); live.width=ic.width; live.height=ic.height; live.style.left='0'; live.style.top='0'; live.style.width=ic.style.width||'100%'; live.style.height=ic.style.height||'100%'; }
     el.appendChild(live); scheduleLive();
@@ -951,7 +980,7 @@ function finishCur(c, cancel, ev){
 function abortCur(){ if(!cur) return; if(cur.kind==='tapTool'){ cur=null; return; } if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
 function eraseAt(c, pt){
   const items=c.T.items(); let ch=false;
-  for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
+  for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it.v2?it.it:it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
   if(ch) c.T.inkRedraw();
 }
 const normRect = (x0,y0,x1,y1) => ({x:rnd(Math.min(x0,x1)), y:rnd(Math.min(y0,y1)), w:rnd(Math.abs(x1-x0)), h:rnd(Math.abs(y1-y0))});
@@ -1156,7 +1185,7 @@ function renderOverlay(pg){
     if(state.tool==='mask') addDel(d, ()=>removeShared('masks', m, p)); ov.appendChild(d); }
   for(const q of sh.problems){ if(q.p!==p) continue;
     const d=document.createElement('div'); d.className='region'; setRect(d, rectMap(toD,pg.g,rectBE(pg.g,q))); const st=problemStatus(b, q.id);
-    d.innerHTML=`<span class="badge ${st.cls}">${st.icon} 問${q.n}</span>`;
+    d.innerHTML=`<span class="badge ${st.cls}">${st.icon} ${q.label?esc(q.label):'問'+q.n}</span>`;
     if(state.tool==='region') addDel(d, ()=>removeShared('problems', q, p)); ov.appendChild(d); }
   for(const t of getInk(p).items){ if(t.k!=='tx') continue;
     const d=document.createElement('div'); d.className='advtx mytx'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
@@ -1215,7 +1244,7 @@ function pageTarget(pg){
                 redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); saveInk(p); }});
     },
     stamp(pt, m, e){ stampAt(pg, pt, m, e); },
-    gap(pt){ gapAt(pg, pt); },
+    gap(pt){ state.viewOnly ? parentGapAt(pg, pt) : gapAt(pg, pt); },
     lasso(poly){ lassoSelect(pg, poly); },
     sticker(pt, tool){
       if(tool==='sticker') stickerAt(pg, pt);
@@ -1308,7 +1337,7 @@ function currentPageFromScroll(){
 $('#viewer').addEventListener('scroll', ()=>{
   state.lastAct=Date.now(); if(!state.book) return;
   scheduleDetails();
-  const p=currentPageFromScroll(); if(p!==state.curPage){ state.curPage=p; renderPageBtn(); if(state.memoOpen) showMemoFor(p); sendCur(); renderViewBar(); }
+  const p=currentPageFromScroll(); if(p!==state.curPage){ state.curPage=p; renderPageBtn(); if(state.memoOpen) showMemoFor(p); sendCur(); renderViewBar(); ansFollow(); }
   debounce('lastpage', ()=>{ if(!state.book) return; const l=getLearn(state.book.id); if(l.lastPage!==state.curPage){ l.lastPage=state.curPage; saveLearn(state.book.id); } }, 2500);
 }, {passive:true});
 function renderPageBtn(){ $('#btnPage').textContent = `${state.curPage+1} / ${state.book?.pages||1}`; }
@@ -1465,6 +1494,8 @@ $('#btnZoomOut').onclick=()=>setZoom(state.zoom/1.25);
 $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="finger"><span>指でも書く<br><span class="s">オフ：指はスクロール、Apple Pencilだけで書く</span></span><span class="sw2 ${state.settings.fingerDraw?'on':''}"></span></button>
   <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
+  <button class="opt" data-a="detect"><span>🔍 問題を自動で見つける<br><span class="s">問1・(2)・①などから1問ずつのわくを作る</span></span><span>🔍</span></button>
+  <button class="opt" data-a="ansLock"><span>答えを見るときにパスコード<br><span class="s">オン：📖 答え を開くには、おうちの人のパスコード（10分有効）</span></span><span class="sw2 ${state.settings.ansLock?'on':''}"></span></button>
   <button class="opt" data-a="rotPage"><span>このページを回転<br><span class="s">90°ずつ右に回ります（↶で戻せます）</span></span><span>↻</span></button>
   <button class="opt" data-a="rotAll"><span>全ページを回転</span><span>🔄</span></button>
   <button class="opt" data-a="clearPage"><span>このページの書き込みを消す<br><span class="s">丸つけと記録は残ります（↶で戻せます）</span></span><span>🧽</span></button>
@@ -1480,6 +1511,8 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
 async function menuAction(a){
   if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
   else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
+  else if(a==='detect') autoDetect();
+  else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスコード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
   else if(a==='rotPage'){ if(state.book) rotatePages([state.curPage]); }
   else if(a==='rotAll'){ if(state.book) rotatePages(state.pages.map(p=>p.i)); }
   else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
@@ -1537,7 +1570,7 @@ $('#fileJson').onchange=async e=>{
 };
 
 /* ================= library ================= */
-function showScreen(s){
+function showScreen(s){ if(s!=='main' && typeof ANS!=='undefined' && ANS.open) closeAnswer();
   state.screen=s;
   $('#lib').classList.toggle('hidden', s!=='lib');
   $('#review').classList.toggle('hidden', !(s==='review'||s==='solve'));
@@ -1779,7 +1812,7 @@ function sizeMemo(){
   if(!memoCv.dataset.sized){ memoCv.dataset.sized='1'; const r=pixelRatioFor(MEMO_W,MEMO_H); memoCv.width=Math.floor(MEMO_W*r); memoCv.height=Math.floor(MEMO_H*r); memoCv.style.width=MEMO_W+'px'; memoCv.style.height=MEMO_H+'px'; }
   drawMemo();
 }
-function drawMemo(){ if(state.memoOpen && memoCv.width && state.book) drawAll(memoCv, memoItems()); }
+function drawMemo(){ if(state.memoOpen && memoCv.width && state.book) drawAll(memoCv, memoItems().concat(state.advHidden && !state.viewOnly ? [] : (state.adv.get(memoPage)?.memo||[]))); }
 function showMemoFor(p){ memoPage=p; $('#memoTitle').textContent=`📝 メモ（${p+1}ページ）`; drawMemo(); }
 function memoBox(){
   const A=$('#mainArea').getBoundingClientRect(); let b=state.settings.memoBox;
@@ -1793,8 +1826,8 @@ function setMemo(open){
   state.memoOpen=open; $('#memo').classList.toggle('hidden',!open); $('#btnMemo').classList.toggle('on',open);
   if(open){ placeMemo(); sizeMemo(); showMemoFor(state.curPage); }
 }
-$('#btnMemo').onclick=()=>setMemo(!state.memoOpen);
-$('#memoClose').onclick=()=>setMemo(false);
+$('#btnMemo').onclick=()=>{ setMemo(!state.memoOpen); sendMemoState(state.memoOpen); };
+$('#memoClose').onclick=()=>{ setMemo(false); sendMemoState(false); };
 $('#memoClear').onclick=()=>{
   const p=memoPage, list=memoItems(p).slice(); if(!list.length) return;
   const apply=v=>{ getInk(p).memo=v; saveInk(p); if(memoPage===p) drawMemo(); };
@@ -1815,13 +1848,20 @@ function dragHandle(el, onMove){
 dragHandle($('#memo .mhead'), (b,dx,dy)=>({...b, x:b.x+dx, y:b.y+dy}));
 dragHandle($('#memoResize'), (b,dx,dy)=>({...b, w:Math.max(220,b.w+dx), h:Math.max(170,b.h+dy)}));
 const memoT={
-  getW:()=>memoW, liveInfo:()=>({area:'memo', p:memoPage}), tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
+  getW:()=>memoW, liveInfo:()=>({area: state.viewOnly?'amemo':'memo', p:memoPage}), tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
   canDraw:()=>state.memoOpen && !!state.book, scroller:()=>$('#memoBody'),
-  items:()=>memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
-  addStroke(item){ const p=memoPage; memoItems(p).push(item); drawItem(memoCv.getContext('2d'), item, memoCv.width/10000); saveInk(p);
+  items:()=> state.viewOnly ? advMemo(memoPage) : memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
+  addStroke(item){ const p=memoPage;
+    if(state.viewOnly){ advMemo(p).push(item); drawMemo(); saveAdv(p);
+      pushUndo({undo:()=>{ const a=advMemo(p); const j=a.indexOf(item); if(j>=0) a.splice(j,1); saveAdv(p); if(memoPage===p) drawMemo(); },
+                redo:()=>{ advMemo(p).push(item); saveAdv(p); if(memoPage===p) drawMemo(); }}); return; } memoItems(p).push(item); drawItem(memoCv.getContext('2d'), item, memoCv.width/10000); saveInk(p);
     pushUndo({undo:()=>{ const a=memoItems(p); const j=a.indexOf(item); if(j>=0) a.splice(j,1); saveInk(p); if(memoPage===p) drawMemo(); },
               redo:()=>{ memoItems(p).push(item); saveInk(p); if(memoPage===p) drawMemo(); }}); },
-  commitErase(list){ const p=memoPage; saveInk(p);
+  commitErase(list){ const p=memoPage;
+    if(state.viewOnly){ saveAdv(p);
+      pushUndo({undo:()=>{ advMemo(p).push(...list); saveAdv(p); if(memoPage===p) drawMemo(); },
+                redo:()=>{ const a=getAdv(p); a.memo=(a.memo||[]).filter(x=>!list.includes(x)); saveAdv(p); if(memoPage===p) drawMemo(); }}); return; }
+    saveInk(p);
     pushUndo({undo:()=>{ memoItems(p).push(...list); saveInk(p); if(memoPage===p) drawMemo(); },
               redo:()=>{ const r=getInk(p); r.memo=(r.memo||[]).filter(x=>!list.includes(x)); saveInk(p); if(memoPage===p) drawMemo(); }}); }
 };
@@ -1829,7 +1869,7 @@ attachInput($('#memoStage'), memoT); guardStylus($('#memoBody'));
 
 /* ================= ツールをかくす ================= */
 function renderToolsMin(){
-  const hid=!!state.settings.toolsHidden; $('#tools').classList.toggle('min', hid);
+  const hid=!!state.settings.toolsHidden; $('#tools').classList.toggle('min', hid); document.body.style.setProperty('--ansb', hid?'8px':'90px');
   const t=TOOLS.find(x=>x[0]===state.tool)||TOOLS[1]; $('#toolsMini').innerHTML=`${t[1]}<small>▴ 出す</small>`;
 }
 $('#btnToolsHide').onclick=()=>{ state.settings.toolsHidden=true; saveMeta(); renderToolsMin(); };
@@ -2040,14 +2080,26 @@ function clearViewLive(p){ const pg=state.pages[p]; if(pg?.vlive){ pg.vlive.getC
 async function onLiveMsg(m){
   if(m.t==='q'){ if(!sentQ.has(m.q?.id) && !(Cloud.mode==='cf' && !state.viewOnly && m.q?.L===state.learner && state.screen==='main')) showQBar(m.q); return; }
   if(m.t==='qack'){ if(!state.viewOnly && m.L===state.learner){ toast('👀 おうちの人が見てくれています', 3500); if(state.settings.sound) tone(1319,0,.2,'sine',.1); } return; }
+  if(m.t==='gapOp'){
+    if(!state.viewOnly && m.L===state.learner && state.book?.id===m.b){ if(gapOpApply(m.p, m.op, true, false)){ saveInk(m.p); relayoutPage(m.p); toast('↕️ おうちの人が、書くスペースを入れました', 2400); } }
+    return;
+  }
+  if(m.t==='memo'){
+    if(state.book?.id===m.b && state.learner===m.L && (state.viewOnly ? m.from==='child' : m.from==='parent')){
+      setMemo(m.open); if(m.open){ showMemoFor(m.p); if(!state.viewOnly) toast('📝 おうちの人がメモを開きました', 2200); }
+    }
+    return;
+  }
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
   if(m.L && m.L!==state.learner) return;
-  if(m.t==='liveEnd'){ clearViewLive(m.p); if(m.area==='memo' && state.memoOpen && memoPage===m.p) drawMemo(); return; }
+  if(m.t==='liveEnd'){ clearViewLive(m.p); if((m.area==='memo'||m.area==='amemo') && state.memoOpen && memoPage===m.p) drawMemo(); return; }
   if(m.t==='live') armLiveClear(m.p);
   if(m.t==='adv'){ setAdvRec(m.b, m.p, m.rec, true); creditAwards(m.b); return; }
   if(m.t==='react'){ if(!state.viewOnly) showReaction(m.e, m.text); return; }
   if(m.t==='look'){ if(!state.viewOnly && state.book?.id===m.b) showPing(m.p, m.x, m.y); else if(!state.viewOnly) toast('👆 おうちの人が「ここ見て」と言っています', 2600); return; }
+  if(m.t==='live' && m.area==='amemo'){ if(!state.viewOnly && state.book?.id===m.b && state.memoOpen && memoPage===m.p && m.item) drawAll(memoCv, memoItems().concat(state.adv.get(m.p)?.memo||[], [m.item])); return; }
+  if(m.t==='liveEnd' && m.area==='amemo'){ if(!state.viewOnly && state.memoOpen && memoPage===m.p) drawMemo(); return; }
   if(m.t==='live' && m.area==='adv'){
     if(state.viewOnly || state.advHidden || state.book?.id!==m.b || !m.item) return;
     const pg=state.pages[m.p]; if(!pg?.rendered) return;
@@ -2090,10 +2142,10 @@ function getAdv(p){ let r=state.adv.get(p); if(!r){ r={items:[], updated:0}; sta
 const advKey=(b,p,L=state.learner)=>`adv|${L}|${b}|${p}`;
 function saveAdv(p){
   const r=getAdv(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
-  Live.send({t:'adv', L, b, p, rec:{items:r.items, updated:r.updated}});
+  Live.send({t:'adv', L, b, p, rec:{items:r.items, memo:r.memo||[], updated:r.updated}});
   store.put('ink', advKey(b,p,L), r).catch(()=>{});
   debounce('adv'+L+b+p, ()=>{
-    Cloud.put(`ln_${L}_${b}/adv/p${p}`, {kind:'adv', updated:r.updated, items:r.items}, true);
+    Cloud.put(`ln_${L}_${b}/adv/p${p}`, {kind:'adv', updated:r.updated, items:r.items, memo:r.memo||[]}, true);
   }, 500);
   renderAdvBtn();
 }
@@ -2103,6 +2155,7 @@ function setAdvRec(b, p, rec, notify){
   const before=(state.adv.get(p)?.items||[]).length;
   state.adv.set(p, rec);
   const pg=state.pages[p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } clearViewLive(p);
+  if(state.memoOpen && memoPage===p) drawMemo();
   if(notify && !state.viewOnly && (rec.items?.length||0)>before){
     const last=rec.items[rec.items.length-1];
     toast(last?.k==='vid' ? `🎥 動画がとどいたよ（${p+1}ページ）。タップで見られます` : last?.k==='lec' ? `🎬 解説がとどいたよ（${p+1}ページ）。タップで見られます` : last?.k==='au' ? `🔊 音声のアドバイスがとどいたよ（${p+1}ページ）。タップで聞けます` : `💬 アドバイスがとどいたよ（${p+1}ページ）`, 3200);
@@ -2185,7 +2238,7 @@ $('#advImgFile').onchange=async e=>{
 function renderAdvTools(){
   const t=state.advTool;
   const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
-  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
+  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
     + `<button class="tool" data-react="1">👏<small>リアクション</small></button>`
     + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
     + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
@@ -2196,7 +2249,7 @@ $('#advTools').addEventListener('click', e=>{
   if(b.dataset.react){ sendReaction(); return; }
   if(b.dataset.at==='astamp'){ pickSticker(true).then(ok=>{ if(ok){ state.advTool='astamp'; renderAdvTools(); toast(`${state.sticker.e} をはりたい場所をタップ`, 2000); } }); return; }
   if(b.dataset.at==='aping') toast('👆 見てほしい場所をタップすると、子どもの画面でそこが光ります', 2600);
-  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
 });
@@ -2286,116 +2339,382 @@ async function advAudioAt(pg, pt){
 }
 
 
-/* ================= 🎬 解説の録画（線の動き＋声）と再生 ================= */
-const LEC={mode:null, a:4/3*0+0.75, bg:null, bgImg:null, ev:[], cur:null, t0:0, rec:null, chunks:[], stream:null, mime:'', audioBlob:null, dur:0, timer:null, color:'#1d2330', target:null, play:null};
-const LEC_COLORS=['#1d2330','#e11d48','#1f5fd6','#0a9b5c','#ff5a00'];
+/* ================= 🎬 解説の録画（ホワイトボード：線・マーカー・文字・スタンプ・画像＋声）と再生 =================
+   イベントに時刻 t（ミリ秒）をつけて記録し、再生では時刻までの状態を作り直して描く。
+   s=線（it に線の中身、t〜te で書いた） / img=画像 / tx=文字 / st=スタンプ / er=消す / mv=動かす・大きさ / grp=まとめて / undo・redo */
+const LEC={mode:null, a:0.75, bg:null, ev:[], t0:0, rec:null, chunks:[], stream:null, mime:'', audioBlob:null, dur:0, timer:null, target:null, play:null,
+  tool:'pen', pen:'#1d2330', mk:'#ffe14d', penW:1, mkW:1, imgs:new Map(), tbox:new Map(), items:[], sel:null, preview:null, vz:1, vx:0, vy:0, W:300, H:225, prep:[]};
+const LEC_PEN=['#1d2330','#e11d48','#1f5fd6','#0a9b5c','#ff5a00','#7c3aed'], LEC_MK=['#ffe14d','#7dd3fc','#86efac','#ff8fc2','#ffb35c'];
 function lecNow(){ return LEC.t0 ? Math.round(performance.now()-LEC.t0) : 0; }
 function lecSize(){
   const wrap=$('#lecWrap'); const W0=wrap.clientWidth-16, H0=wrap.clientHeight-16;
-  const W=Math.max(200, Math.min(W0, H0/LEC.a)), H=W*LEC.a;
+  const W=Math.max(200, Math.min(W0, H0/LEC.a)), H=W*LEC.a; LEC.W=W; LEC.H=H;
   const st=$('#lecStage'); st.style.width=W+'px'; st.style.height=H+'px';
-  const cv=$('#lecCv'); const r=pixelRatioFor(W,H); cv.width=Math.floor(W*r); cv.height=Math.floor(H*r); cv.style.width=W+'px'; cv.style.height=H+'px';
-  LEC.W=W;
+  lecRes(); lecView();
 }
-// 時刻 T までの状態を描く（録画中は T=Infinity）
-function lecDraw(T=Infinity){
+function lecRes(){
+  const cv=$('#lecCv'), W=LEC.W, H=LEC.H;
+  const r=Math.min(pixelRatioFor(W,H)*Math.min(LEC.vz,3), Math.sqrt(14e6/(W*H)));
+  cv.width=Math.floor(W*r); cv.height=Math.floor(H*r); cv.style.width=W+'px'; cv.style.height=H+'px';
+}
+function lecView(){
+  const st=$('#lecStage'), wrap=$('#lecWrap');
+  if(LEC.vz<=1.001){ LEC.vz=1; LEC.vx=0; LEC.vy=0; }
+  else { const mx=LEC.W*LEC.vz*.85, my=LEC.H*LEC.vz*.85; LEC.vx=Math.max(-mx, Math.min(wrap.clientWidth*.6, LEC.vx)); LEC.vy=Math.max(-my, Math.min(wrap.clientHeight*.6, LEC.vy)); }
+  st.style.transformOrigin='0 0'; st.style.transform=`translate(${LEC.vx}px,${LEC.vy}px) scale(${LEC.vz})`;
+  const s=$('#lecSel'); if(s) s.querySelector('.lsbar').style.transform=`scale(${1/LEC.vz})`;
+}
+// 時刻 T までの状態
+function lecApply(m, e){
+  if(e.k==='s'||e.k==='img'||e.k==='tx'||e.k==='st'){ if(!e.id) e.id='o'+Math.random().toString(36).slice(2,9); m.set(e.id, e); }
+  else if(e.k==='er'){ for(const id of e.ids) m.delete(id); }
+  else if(e.k==='clear'){ m.clear(); }
+  else if(e.k==='mv'){ for(const id of e.ids){ const it=m.get(id); if(it) m.set(id, lecXf(it, e)); } }
+  else if(e.k==='grp'){ for(const x of e.evs) lecApply(m, x); }
+}
+function lecItemsAt(T=Infinity){
+  const done=[], undone=[];
+  for(const e of LEC.ev){ if(e.t>T) break;
+    if(e.k==='undo'){ if(done.length) undone.push(done.pop()); }
+    else if(e.k==='redo'){ if(undone.length) done.push(undone.pop()); }
+    else { done.push(e); undone.length=0; }
+  }
+  const m=new Map(); for(const e of done) lecApply(m, e); return [...m.values()];
+}
+function lecXf(it, e){
+  const f=(x,y)=>[e.cx+(x-e.cx)*e.sc+e.dx, e.cy+(y-e.cy)*e.sc+e.dy];
+  if(it.k==='s'){
+    const src=it.v2 ? it.it : it; const p=src.p.slice();
+    for(let i=0;i<p.length;i+=3){ const q=f(p[i],p[i+1]); p[i]=rnd(q[0]); p[i+1]=rnd(q[1]); }
+    const ni={...src, p, w:src.w*e.sc}; return it.v2 ? {...it, it:ni} : {...it, ...ni};
+  }
+  const q=f(it.x,it.y);
+  if(it.k==='img') return {...it, x:q[0], y:q[1], w:it.w*e.sc, h:it.h*e.sc};
+  if(it.k==='st') return {...it, x:q[0], y:q[1], s:it.s*e.sc};
+  return {...it, x:q[0], y:q[1], fs:it.fs*e.sc, w:(it.w||4000)*e.sc};
+}
+function lecStrokeOf(it, T){
+  if(it.v2){ let p=it.it.p; if(T!==Infinity && it.te>T){ const f=(T-it.t)/Math.max(1,it.te-it.t); p=p.slice(0, Math.max(1,Math.floor(p.length/3*f))*3); } return {...it.it, p}; }
+  let p=it.p; if(T!==Infinity){ let n=0; while(n<p.length && p[n+2]<=T) n+=3; if(n<p.length) p=p.slice(0,n); }
+  return {k:'s', t:'pen', c:it.c, w:it.w, p:p.map((v,i)=>i%3===2?50:v)};
+}
+function lecDrawText(ctx, it, s){
+  const fs=it.fs*s; ctx.save(); ctx.font=`700 ${fs}px "Hiragino Sans","Noto Sans JP",sans-serif`; ctx.fillStyle=it.c||'#1d2330'; ctx.textBaseline='top';
+  const maxW=(it.w||4000)*s, lines=[];
+  for(const para of String(it.text||'').split('\n')){ let line=''; for(const ch of para){ if(line && ctx.measureText(line+ch).width>maxW){ lines.push(line); line=ch; } else line+=ch; } lines.push(line); }
+  let y=it.y*s, mw=0; for(const l of lines){ ctx.fillText(l, it.x*s, y); mw=Math.max(mw, ctx.measureText(l).width); y+=fs*1.35; }
+  LEC.tbox.set(it.id, {x:it.x, y:it.y, w:Math.max(mw/s, it.fs), h:lines.length*it.fs*1.35}); ctx.restore();
+}
+function lecDrawItems(ctx, items, s, T=Infinity){
+  for(const it of items){
+    if(it.k==='img'){ const im=LEC.imgs.get(it.src)?.el; if(im && im.complete && im.naturalWidth) ctx.drawImage(im, it.x*s, it.y*s, it.w*s, it.h*s); else { ctx.fillStyle='#eef1f5'; ctx.fillRect(it.x*s, it.y*s, it.w*s, it.h*s); } }
+    else if(it.k==='tx') lecDrawText(ctx, it, s);
+    else if(it.k==='st') drawSticker(ctx, it, s);
+    else if(it.k==='s'){ const st=lecStrokeOf(it, T); if(st.p.length) drawItem(ctx, st, s); }
+  }
+}
+function lecPaint(T=Infinity){
   const cv=$('#lecCv'), ctx=cv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
-  const s=cv.width/10000; let strokes=[];
-  for(const e of LEC.ev){
-    if(e.t>T) break;
-    if(e.k==='clear') strokes=[]; else if(e.k==='undo') strokes.pop();
-    else if(e.k==='s') strokes.push(e);
-  }
-  for(const e of strokes){
-    let p=e.p; if(T!==Infinity){ let n=0; while(n<p.length && p[n+2]<=T) n+=3; if(n<p.length) p=p.slice(0,n); }
-    if(!p.length) continue;
-    drawItem(ctx, {k:'s', t:'pen', c:e.c, w:e.w, p:p.map((v,i)=>i%3===2?50:v)}, s);
-  }
+  let items=LEC.items; const pv=LEC.preview;
+  if(pv){ const ids=new Set(pv.ids); items=items.map(it=>ids.has(it.id)?lecXf(it,pv):it); }
+  lecDrawItems(ctx, items, cv.width/10000, T);
+  if(LEC.mode==='rec') lecRenderSel();
 }
+function lecDraw(T=Infinity){ LEC.items=lecItemsAt(T); lecPaint(T); }
+function lecPush(e){ LEC.ev.push(e); lecDraw(); if(LEC.sel){ const have=new Set(LEC.items.map(i=>i.id)); LEC.sel.ids=LEC.sel.ids.filter(id=>have.has(id)); if(!LEC.sel.ids.length) LEC.sel=null; lecRenderSel(); } }
+// 位置と大きさ（えらぶ・動かす用）
+function lecBox(it){
+  if(it.k==='img') return {x:it.x, y:it.y, w:it.w, h:it.h};
+  if(it.k==='st'){ const w=it.tx?it.s*1.6:it.s*.6, h=it.s*.5; return {x:it.x-w, y:it.y-h, w:w*2, h:h*2}; }
+  if(it.k==='tx') return LEC.tbox.get(it.id) || {x:it.x, y:it.y, w:it.w||4000, h:it.fs*1.4};
+  const st=lecStrokeOf(it, Infinity), p=st.p; let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(let i=0;i<p.length;i+=3){ x0=Math.min(x0,p[i]); x1=Math.max(x1,p[i]); y0=Math.min(y0,p[i+1]); y1=Math.max(y1,p[i+1]); }
+  const r=(st.w||30)/2; return {x:x0-r, y:y0-r, w:x1-x0+2*r, h:y1-y0+2*r};
+}
+const inPoly=(x,y,poly)=>{ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if(((yi>y)!==(yj>y)) && x<(xj-xi)*(y-yi)/(yj-yi)+xi) c=!c; } return c; };
+function lecSelBox(ids){ let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity; for(const it of LEC.items) if(ids.includes(it.id)){ const b=lecBox(it); x0=Math.min(x0,b.x); y0=Math.min(y0,b.y); x1=Math.max(x1,b.x+b.w); y1=Math.max(y1,b.y+b.h); } return {x:x0,y:y0,w:x1-x0,h:y1-y0}; }
+function lecLasso(poly){
+  const ids=[];
+  for(const it of LEC.items){
+    if(it.k==='s'){ const p=lecStrokeOf(it,Infinity).p; let n=0,t=0; for(let i=0;i<p.length;i+=3){ t++; if(inPoly(p[i],p[i+1],poly)) n++; } if(t && n>=t/2) ids.push(it.id); }
+    else { const b=lecBox(it); if(inPoly(b.x+b.w/2, b.y+b.h/2, poly)) ids.push(it.id); }
+  }
+  LEC.sel = ids.length ? {ids} : null; if(!ids.length) toast('かこんだ中に何もありません', 1400); lecRenderSel();
+}
+function lecRenderSel(){
+  let el=$('#lecSel');
+  if(!LEC.sel || LEC.mode!=='rec'){ el?.remove(); return; }
+  const b=lecSelBox(LEC.sel.ids); if(!isFinite(b.x)){ el?.remove(); return; }
+  const pv=LEC.preview; let r=b;
+  if(pv){ r={x:pv.cx+(b.x-pv.cx)*pv.sc+pv.dx, y:pv.cy+(b.y-pv.cy)*pv.sc+pv.dy, w:b.w*pv.sc, h:b.h*pv.sc}; }
+  if(!el){
+    el=document.createElement('div'); el.id='lecSel';
+    el.innerHTML=`<div class="lsH"></div><div class="lsbar"><button data-s="del">🗑 消す</button><button data-s="dup">⧉ 複製</button><button data-s="small">－</button><button data-s="big">＋</button><button data-s="ok">✓</button></div>`;
+    $('#lecStage').appendChild(el); lecSelBind(el);
+  }
+  const k=LEC.W/10000; el.style.cssText=`left:${r.x*k-4}px;top:${r.y*k-4}px;width:${r.w*k+8}px;height:${r.h*k+8}px`;
+  el.querySelector('.lsbar').style.transform=`scale(${1/LEC.vz})`;
+}
+function lecSelBind(el){
+  let d=null;
+  el.addEventListener('pointerdown', e=>{
+    e.stopPropagation(); if(e.target.closest('button')) return; e.preventDefault(); try{ el.setPointerCapture(e.pointerId); }catch{}
+    d={id:e.pointerId, x:e.clientX, y:e.clientY, scale:e.target.classList.contains('lsH'), b:lecSelBox(LEC.sel.ids)};
+  });
+  el.addEventListener('pointermove', e=>{
+    if(!d || e.pointerId!==d.id) return; e.preventDefault();
+    const k=10000/$('#lecCv').getBoundingClientRect().width, dx=(e.clientX-d.x)*k, dy=(e.clientY-d.y)*k;
+    LEC.preview = d.scale ? {ids:LEC.sel.ids, dx:0, dy:0, cx:d.b.x, cy:d.b.y, sc:Math.max(.1, (d.b.w+dx)/Math.max(1,d.b.w))} : {ids:LEC.sel.ids, dx, dy, cx:0, cy:0, sc:1};
+    lecPaint();
+  });
+  const end=e=>{ if(!d || e.pointerId!==d.id) return; d=null; const pv=LEC.preview; LEC.preview=null; if(pv && (Math.abs(pv.dx)>5 || Math.abs(pv.dy)>5 || Math.abs(pv.sc-1)>.01)) lecPush({k:'mv', t:lecNow(), ...pv, dx:rnd(pv.dx), dy:rnd(pv.dy)}); else lecPaint(); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  el.addEventListener('click', e=>{
+    const a=e.target.closest('button')?.dataset.s; if(!a || !LEC.sel) return; e.stopPropagation();
+    const ids=LEC.sel.ids, b=lecSelBox(ids);
+    if(a==='ok'){ LEC.sel=null; lecRenderSel(); }
+    else if(a==='del'){ lecPush({k:'er', t:lecNow(), ids:[...ids]}); LEC.sel=null; lecRenderSel(); }
+    else if(a==='big'||a==='small'){ const sc=a==='big'?1.25:.8; lecPush({k:'mv', t:lecNow(), ids:[...ids], cx:b.x+b.w/2, cy:b.y+b.h/2, sc, dx:0, dy:0}); }
+    else if(a==='dup'){
+      const t=lecNow(), evs=[], nid=[], mv={cx:0,cy:0,sc:1,dx:300,dy:300};
+      for(const it of LEC.items) if(ids.includes(it.id)){
+        const c=lecXf(it, mv), id=uid('d'); nid.push(id);
+        evs.push(c.k==='s' ? {k:'s', id, t, te:t, v2:1, it:lecStrokeOf(c, Infinity)} : {...c, id, t});
+      }
+      lecPush({k:'grp', t, evs}); LEC.sel={ids:nid}; lecRenderSel();
+    }
+  });
+}
+// 文字・スタンプ・画像
+async function lecTextAt(pt){
+  const hit=[...LEC.items].reverse().find(it=>{ if(it.k!=='tx') return false; const b=lecBox(it); return pt.x>=b.x-100 && pt.x<=b.x+b.w+100 && pt.y>=b.y-100 && pt.y<=b.y+b.h+100; });
+  const r=await textSheet(hit||null, '🔤 ボードに文字');
+  if(!r) return;
+  if(r==='del'){ if(hit) lecPush({k:'er', t:lecNow(), ids:[hit.id]}); return; }
+  if(!r.text) return;
+  if(hit) lecPush({...hit, text:r.text, fs:r.fs, t:lecNow()});
+  else lecPush({k:'tx', id:uid('x'), t:lecNow(), x:rnd(pt.x), y:rnd(pt.y), w:Math.max(1500, 9600-pt.x), fs:r.fs, text:r.text, c:LEC.pen});
+}
+function lecStickerAt(pt){
+  const near=[...LEC.items].reverse().find(it=>stkHit(it,pt));
+  if(near){ lecPush({k:'er', t:lecNow(), ids:[near.id]}); return; }
+  const it=newSticker(pt); delete it.award; lecPush({...it, t:lecNow()});
+  if(state.settings.sound) tone(1320,0,.08,'triangle',.08);
+}
+async function lecLoadImg(src, url){
+  const el=new Image(); el.src=url; try{ await el.decode(); }catch{} const o=LEC.imgs.get(src)||{}; o.el=el; LEC.imgs.set(src,o); return el;
+}
+async function lecAddCanvas(c){
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.88)); const buf=await blob.arrayBuffer(); const src=await sha(buf);
+  LEC.imgs.set(src, {buf}); await lecLoadImg(src, URL.createObjectURL(blob));
+  // 見えている所のまん中に、なるべく大きく置く
+  const asp=c.height/c.width, BH=10000*LEC.a;
+  const vis=lecVisible(); let w=Math.min(vis.w*.9, 9400), h=w*asp; if(h>vis.h*.9){ h=vis.h*.9; w=h/asp; }
+  const x=Math.max(0, Math.min(10000-w, vis.x+(vis.w-w)/2)), y=Math.max(0, Math.min(BH-h, vis.y+(vis.h-h)/2));
+  const id=uid('i'); lecPush({k:'img', id, t:lecNow(), src, x:rnd(x), y:rnd(y), w:rnd(w), h:rnd(h)});
+  LEC.sel={ids:[id]}; lecRenderSel(); toast('動かす・大きさを変えるときは、わくをドラッグ（右下の●で大きさ）', 2600);
+}
+function lecVisible(){
+  const wr=$('#lecWrap').getBoundingClientRect(), cr=$('#lecCv').getBoundingClientRect(), k=10000/cr.width, BH=10000*LEC.a;
+  const x0=Math.max(0,(wr.left-cr.left)*k), y0=Math.max(0,(wr.top-cr.top)*k), x1=Math.min(10000,(wr.right-cr.left)*k), y1=Math.min(BH,(wr.bottom-cr.top)*k);
+  return x1>x0 && y1>y0 ? {x:x0, y:y0, w:x1-x0, h:y1-y0} : {x:0, y:0, w:10000, h:BH};
+}
+// ページ（または一部）を、子どもの書きこみごと絵にする
+async function lecCapture(p, rD, ink){
+  const pg=state.pages[p]; const page=await state.pdf.getPage(p+1); const rotation=((page.rotate||0)+pg.g.rot)%360;
+  let k=Math.min(2000, Math.max(1100, 2000*rD.w/pg.g.Dw))/rD.w; if(rD.h*k>4000) k=4000/rD.h;
+  const c=document.createElement('canvas'); c.width=Math.max(1,Math.round(rD.w*k)); c.height=Math.max(1,Math.round(rD.h*k));
+  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height);
+  await paintPdf(ctx, page, rotation, pg.g, k, rD.x*k, rD.y*k, c.width, c.height, ()=>{}, ()=>true);
+  if(ink) drawOnPage(ctx, pageItems(p), pg.g, k, rD.x*k, rD.y*k);
+  return c;
+}
+async function lecCropPick(p, ink){
+  const pg=state.pages[p]; const full={x:0,y:0,w:pg.g.Dw,h:pg.g.Dh};
+  const prev=await lecCapture(p, full, ink);
+  let rect=null;
+  const ok=await openSheet(`<h3>✂️ のせたい所をなぞって囲む</h3><div id="cropBox" style="position:relative;max-height:62vh;overflow:auto;touch-action:none;border:1px solid var(--line)"></div>
+    <div class="grid2" style="margin-top:10px"><button class="btn sub" data-a="0">やめる</button><button class="btn" data-a="1">これをのせる</button></div>`, close=>{
+    const box=$('#cropBox'); prev.style.cssText='width:100%;display:block;touch-action:none'; box.appendChild(prev);
+    const rb=document.createElement('div'); rb.style.cssText='position:absolute;border:3px solid #1f6feb;background:rgba(31,111,235,.12);pointer-events:none;display:none'; box.appendChild(rb);
+    let s=null;
+    const P=e=>{ const r=prev.getBoundingClientRect(); return {x:Math.max(0,Math.min(r.width,e.clientX-r.left)), y:Math.max(0,Math.min(r.height,e.clientY-r.top)), W:r.width}; };
+    prev.addEventListener('pointerdown', e=>{ e.preventDefault(); try{ prev.setPointerCapture(e.pointerId); }catch{} s=P(e); rect=null; });
+    prev.addEventListener('pointermove', e=>{ if(!s) return; const q=P(e); const x=Math.min(s.x,q.x), y=Math.min(s.y,q.y), w=Math.abs(q.x-s.x), h=Math.abs(q.y-s.y);
+      rb.style.display='block'; rb.style.left=x+'px'; rb.style.top=y+'px'; rb.style.width=w+'px'; rb.style.height=h+'px'; const k=pg.g.Dw/q.W; rect={x:x*k, y:y*k, w:w*k, h:h*k}; });
+    prev.addEventListener('pointerup', ()=>{ s=null; });
+    $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a==='1'));
+  });
+  if(!ok) return;
+  if(!rect || rect.w<100 || rect.h<100){ toast('のせたい所を指やペンで四角く囲んでください'); return; }
+  await lecAddCanvas(await lecCapture(p, rect, ink));
+}
+async function lecImgMenu(){
+  const p=LEC.target.p, pg=state.pages[p];
+  const probs=(state.shared.problems||[]).filter(q=>q.p===p).sort((a,b)=>a.y-b.y);
+  let ink=true;
+  const r=await openSheet(`<h3>🖼 ボードにのせる</h3><p class="note" style="margin-bottom:8px">${p+1}ページから、または写真から</p>
+    ${probs.length?`<p class="note" style="margin:4px 0">🔲 問題をえらぶ</p><div class="row" style="margin-bottom:8px">${probs.map(q=>`<button class="chip" data-q="${q.id}">${esc(q.label||'問'+q.n)}</button>`).join('')}</div>`:''}
+    <button class="opt" data-a="crop"><span>✂️ 場所をえらんで切りとる</span><span>✂️</span></button>
+    <button class="opt" data-a="page"><span>📄 ページ全体</span><span>📄</span></button>
+    <button class="opt" data-a="file"><span>📷 写真・画像をえらぶ</span><span>📷</span></button>
+    <button class="opt" data-a="ink"><span>子どもの書きこみもいっしょにのせる</span><span class="sw2 on" id="lecInkSw"></span></button>`,
+    close=>$('#sheet').querySelectorAll('[data-a],[data-q]').forEach(b=>b.onclick=()=>{
+      if(b.dataset.a==='ink'){ ink=!ink; $('#lecInkSw').classList.toggle('on',ink); return; }
+      close(b.dataset.q?{q:b.dataset.q}:{a:b.dataset.a});
+    }));
+  if(!r) return;
+  try{
+    if(r.a==='file'){ $('#lecImgFile').click(); return; }
+    if(!pg){ toast('ページが見つかりません'); return; }
+    toast('準備しています…', 3000);
+    if(r.a==='crop') return await lecCropPick(p, ink);
+    let rD={x:0,y:0,w:pg.g.Dw,h:pg.g.Dh};
+    if(r.q){ const q=probs.find(x=>x.id===r.q); rD=rectMap(toD, pg.g, rectBE(pg.g, q)); }
+    await lecAddCanvas(await lecCapture(p, rD, ink));
+  }catch(err){ console.warn(err); toast('のせられませんでした'); }
+}
+$('#lecImgFile').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{ const bmp=await createImageBitmap(f); const k=Math.min(1, 2000/Math.max(bmp.width,bmp.height));
+    const c=document.createElement('canvas'); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+    const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(bmp,0,0,c.width,c.height); await lecAddCanvas(c); }
+  catch(err){ console.warn(err); toast('この画像は使えませんでした'); }
+};
+// 書く道具（ページと同じしくみを使う：筆圧・止めるとまっすぐ／まる・消しゴム・かこむ）
+const lecT={
+  getW:()=>LEC.W, ownPinch:true, lecTool:()=>LEC.tool,
+  toPt(e){ const r=$('#lecCv').getBoundingClientRect(); const k=10000/r.width; return {x:(e.clientX-r.left)*k, y:(e.clientY-r.top)*k}; },
+  unitsPerPx:()=>10000/$('#lecCv').getBoundingClientRect().width,
+  style:mk=>({c: mk?LEC.mk:LEC.pen, w: mk?MK_W[LEC.mkW]:PEN_W[LEC.penW]}),
+  canDraw:()=>LEC.mode==='rec' && !LEC.audioBlob, scroller:()=>$('#lecWrap'),
+  items:()=>LEC.items, inkCanvas:()=>$('#lecCv'), ovEl:()=>$('#lecStage'), inkRedraw:()=>lecPaint(),
+  liveSetup(lv){ const cv=$('#lecCv'); lv.width=cv.width; lv.height=cv.height; lv.style.cssText=`position:absolute;left:0;top:0;width:${cv.style.width};height:${cv.style.height};pointer-events:none`; },
+  drawLive(ctx,item){ drawItem(ctx, item, ctx.canvas.width/10000); },
+  onStart(){ LEC.st0=lecNow(); if(LEC.sel){ LEC.sel=null; lecRenderSel(); } },
+  addStroke(item){ lecPush({k:'s', id:uid('s'), t:LEC.st0??lecNow(), te:lecNow(), v2:1, it:item}); },
+  commitErase(list){ lecPush({k:'er', t:lecNow(), ids:list.map(i=>i.id)}); },
+  lasso(poly){ lecLasso(poly); },
+  tap(pt){ if(LEC.tool==='text') lecTextAt(pt); else if(LEC.sel){ LEC.sel=null; lecRenderSel(); } },
+  sticker(pt){ lecStickerAt(pt); },
+};
+attachInput($('#lecStage'), lecT);
+// 2本指でズーム・移動、✋や指（指で書かない設定）で移動
+(()=>{
+  const wrap=$('#lecWrap'); let pin=null, pan=null, rt=0;
+  const base=()=>{ const wr=wrap.getBoundingClientRect(), st=$('#lecStage'); return {x:wr.left+st.offsetLeft, y:wr.top+st.offsetTop}; };
+  const sharpen=()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(!LEC.mode) return; lecRes(); LEC.mode==='play' ? lecPaint(LEC.play?.lastT??Infinity) : lecPaint(); }, 250); };
+  wrap.addEventListener('touchstart', e=>{
+    if(e.touches.length===2){ const [a,b]=e.touches; const B=base(); const m={x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2};
+      pin={d0:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY), z0:LEC.vz, sx:(m.x-B.x-LEC.vx)/LEC.vz, sy:(m.y-B.y-LEC.vy)/LEC.vz}; pan=null; }
+  }, {passive:true});
+  wrap.addEventListener('touchmove', e=>{
+    if(!pin || e.touches.length<2) return; e.preventDefault();
+    const [a,b]=e.touches, B=base(), m={x:(a.clientX+b.clientX)/2, y:(a.clientY+b.clientY)/2};
+    LEC.vz=Math.max(1, Math.min(6, pin.z0*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/pin.d0));
+    LEC.vx=m.x-B.x-pin.sx*LEC.vz; LEC.vy=m.y-B.y-pin.sy*LEC.vz; lecView();
+  }, {passive:false});
+  wrap.addEventListener('touchend', e=>{ if(e.touches.length<2 && pin){ pin=null; sharpen(); } });
+  wrap.addEventListener('pointerdown', e=>{
+    if(!LEC.mode || e.target.closest('#lecSel')) return;
+    const handMode = LEC.mode==='play' || LEC.tool==='hand' || (e.pointerType==='touch' && !state.settings.fingerDraw);
+    if(!handMode) return;
+    pan={id:e.pointerId, x:e.clientX, y:e.clientY, vx:LEC.vx, vy:LEC.vy};
+  });
+  window.addEventListener('pointermove', e=>{ if(!pan || e.pointerId!==pan.id || pin || LEC.vz<=1) return; LEC.vx=pan.vx+(e.clientX-pan.x); LEC.vy=pan.vy+(e.clientY-pan.y); lecView(); });
+  const end=e=>{ if(pan && e.pointerId===pan.id) pan=null; };
+  window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);
+  guardStylus(wrap);
+})();
+function lecIsEmpty(){ return !LEC.ev.length; }
 function lecTools(){
   const recOn = LEC.rec?.state==='recording';
   const done = !recOn && LEC.audioBlob!==null && LEC.mode==='rec';
-  if(LEC.mode==='play'){ $('#lecBar').innerHTML=`<button class="ib" data-l="close">✕</button><b>🎬 ${esc(LEC.play?.title||'解説')}</b>`; return; }
-  $('#lecBar').innerHTML = `<button class="ib" data-l="close">✕</button><b>🎬 解説を録る</b><div class="sp"></div>`
-    + (LEC.ev.length||recOn ? '' : `<button class="pill" data-l="bg">${LEC.bg?'📄 白紙にする':'📄 このページを下じきに'}</button>`)
-    + LEC_COLORS.map(c=>`<button class="sw ${LEC.color===c?'on':''}" data-c="${c}" style="background:${c}"></button>`).join('')
-    + `<button class="ib" data-l="undo">↶</button><button class="pill" data-l="clear">全部消す</button>`;
+  if(LEC.mode==='play'){ $('#lecBar').innerHTML=`<button class="ib" data-l="close">✕</button><b>🎬 ${esc(LEC.play?.title||'解説')}</b><div class="sp"></div><button class="pill" data-l="fit">🔍 全体</button>`; return; }
+  const T=LEC.tool, mk=T==='marker';
+  const B=(id,ic,lb)=>`<button class="tool ${T===id?'on':''}" data-lt="${id}">${ic}<small>${lb}</small></button>`;
+  const cols = mk ? LEC_MK : LEC_PEN, curC = mk ? LEC.mk : LEC.pen;
+  $('#lecBar').innerHTML = `<button class="ib" data-l="close">✕</button><b style="white-space:nowrap">🎬 解説</b>`
+    + (lecIsEmpty() && !recOn && !done ? `<button class="pill" data-l="orient">${LEC.a<1?'▭ 横長':'▯ 縦長'}</button>` : '')
+    + `<div class="sp"></div>`
+    + (done ? '' :
+      `<div class="lecTools">` + B('hand','✋','動かす') + B('pen','✏️','ペン') + B('marker','🖍','マーカー') + B('eraser','🧽','消す') + B('lasso','➰','かこむ') + B('text','🔤','文字') + B('sticker','🌟','スタンプ') + `<button class="tool" data-l="img">🖼<small>のせる</small></button></div>`
+      + `<div class="lecTools">` + cols.map(c=>`<button class="sw ${curC.toLowerCase()===c?'on':''}" data-c="${c}" style="background:${c}"></button>`).join('')
+      + `<button class="ib" data-l="pal" title="ほかの色">🎨</button>`
+      + [0,1,2].map(i=>`<button class="wbtn ${(mk?LEC.mkW:LEC.penW)===i?'on':''}" data-w="${i}"><span style="height:${[3,6,10][i]}px"></span></button>`).join('')
+      + `<button class="ib" data-l="undo">↶</button><button class="ib" data-l="redo">↷</button><button class="ib" data-l="clear" title="全部消す">🗑</button><button class="ib" data-l="fit" title="全体を見る">🔍</button></div>`);
   $('#lecCtl').innerHTML = done
-    ? `<button class="btn sub" data-l="redo">やり直す</button><button class="btn sub" data-l="preview">▶ 確かめる</button><button class="btn" data-l="send">送る（${fmtSec(LEC.dur/1000)}）</button>`
+    ? `<button class="btn sub" data-l="again">やり直す</button><button class="btn sub" data-l="preview">▶ 確かめる</button><button class="btn" data-l="send">送る（${fmtSec(LEC.dur/1000)}）</button>`
     : `<button id="lecRec" class="recbtn ${recOn?'on':''}" data-l="rec">${recOn?'■':'●'}</button><div id="lecTime" style="font-size:22px;font-weight:800;min-width:70px">${fmtSec(recOn?lecNow()/1000:0)}</div>
-       <div class="note" style="max-width:260px">${recOn?'書きながら話してください（最大5分）。■で止める':'●を押すと、声と書いた線の録画が始まります'}</div>`;
+       <div class="note" style="max-width:300px">${recOn?'書きながら話してください（最大5分）。■で止める':'●を押すと、声と書いたものの録画が始まります。始める前に、画像をのせたり下書きしてもOK'}</div>`;
 }
 async function openLecRecorder(pg, pt){
-  LEC.mode='rec'; LEC.target={p:pg.i, pt}; LEC.ev=[]; LEC.bg=null; LEC.a=0.75; LEC.audioBlob=null; LEC.dur=0; LEC.t0=0; LEC.color=state.advColor||'#1d2330';
+  Object.assign(LEC, {mode:'rec', target:{p:pg.i, pt}, ev:[], prep:[], bg:null, a:0.75, audioBlob:null, dur:0, t0:0, sel:null, preview:null, vz:1, vx:0, vy:0, tool:'pen', pen:state.advColor||'#1d2330'});
+  LEC.imgs=new Map(); LEC.tbox=new Map();
   $('#lecBg').removeAttribute('src'); $('#lec').classList.remove('hidden'); lecSize(); lecTools(); lecDraw();
-}
-async function lecSetBg(on){
-  if(!on){ LEC.bg=null; LEC.bgBuf=null; LEC.a=0.75; $('#lecBg').removeAttribute('src'); lecSize(); lecDraw(); lecTools(); return; }
-  const p=LEC.target.p; const page=await state.pdf.getPage(p+1); const rot=((page.rotate||0)+pageRot(p))%360;
-  const vp1=page.getViewport({scale:1, rotation:rot}); const vp=page.getViewport({scale:1400/vp1.width, rotation:rot});
-  const c=document.createElement('canvas'); c.width=Math.round(vp.width); c.height=Math.round(vp.height);
-  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); await page.render({canvasContext:ctx, viewport:vp}).promise;
-  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.8)); LEC.bgBuf=await blob.arrayBuffer();
-  LEC.bg=URL.createObjectURL(blob); LEC.a=c.height/c.width; $('#lecBg').src=LEC.bg; lecSize(); lecDraw(); lecTools();
 }
 async function lecStart(){
   if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ toast('この画面では録音できません'); return; }
   try{ LEC.stream=await navigator.mediaDevices.getUserMedia({audio:true}); }catch{ toast('マイクが使えません。設定でマイクを許可してください', 5000); return; }
-  LEC.mime=pickMime(); LEC.chunks=[]; LEC.ev=[];
+  LEC.mime=pickMime(); LEC.chunks=[]; LEC.prep=LEC.ev.slice();
   LEC.rec=new MediaRecorder(LEC.stream, LEC.mime?{mimeType:LEC.mime}:undefined);
   LEC.rec.ondataavailable=e=>{ if(e.data.size) LEC.chunks.push(e.data); };
-  LEC.rec.onstop=()=>{ LEC.audioBlob=new Blob(LEC.chunks,{type:LEC.rec.mimeType||LEC.mime||'audio/mp4'}); LEC.stream.getTracks().forEach(t=>t.stop()); lecTools(); };
+  LEC.rec.onstop=()=>{ LEC.audioBlob=new Blob(LEC.chunks,{type:LEC.rec.mimeType||LEC.mime||'audio/mp4'}); LEC.stream.getTracks().forEach(t=>t.stop()); LEC.sel=null; lecRenderSel(); lecTools(); };
   LEC.rec.start(250); LEC.t0=performance.now(); lecDraw(); lecTools();
   LEC.timer=setInterval(()=>{ const s=lecNow()/1000; const el=$('#lecTime'); if(el) el.textContent=fmtSec(s); if(s>=300) lecStop(); }, 250);
 }
-function lecStop(){ clearInterval(LEC.timer); if(LEC.cur){ LEC.ev.push(LEC.cur); LEC.cur=null; } LEC.dur=lecNow(); try{ LEC.rec?.state==='recording' && LEC.rec.stop(); }catch{} }
-// 書く（録画中だけ）
-(()=>{
-  const cv=$('#lecCv'); let id=null;
-  const pt=e=>{ const r=cv.getBoundingClientRect(), k=10000/LEC.W; return [rnd((e.clientX-r.left)*k), rnd((e.clientY-r.top)*k), lecNow()]; };
-  cv.addEventListener('pointerdown', e=>{
-    if(LEC.mode!=='rec') return;
-    if(LEC.rec?.state!=='recording'){ toast('●を押してから書いてね', 1500); return; }
-    if(e.pointerType==='touch' && state.settings.penSeen) return;   // Pencilがある端末では指はつかわない
-    e.preventDefault(); try{ cv.setPointerCapture(e.pointerId); }catch{} id=e.pointerId;
-    LEC.cur={k:'s', t:lecNow(), c:LEC.color, w:PEN_W[1], p:pt(e)};
-  });
-  cv.addEventListener('pointermove', e=>{
-    if(e.pointerId!==id || !LEC.cur) return; e.preventDefault();
-    const evs=e.getCoalescedEvents?.()||[]; for(const ev of (evs.length?evs:[e])){ const q=pt(ev), p=LEC.cur.p; if(Math.hypot(q[0]-p[p.length-3], q[1]-p[p.length-2])<8) continue; p.push(...q); }
-    const ctx=cv.getContext('2d'); lecDraw(); drawItem(ctx, {k:'s', t:'pen', c:LEC.cur.c, w:LEC.cur.w, p:LEC.cur.p.map((v,i)=>i%3===2?50:v)}, cv.width/10000);
-  });
-  const up=e=>{ if(e.pointerId!==id) return; id=null; if(LEC.cur){ LEC.ev.push(LEC.cur); LEC.cur=null; lecDraw(); } };
-  cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-  guardStylus($('#lecWrap'));
-})();
+function lecStop(){ clearInterval(LEC.timer); LEC.dur=lecNow(); try{ LEC.rec?.state==='recording' && LEC.rec.stop(); }catch{} }
+function lecPalette(){
+  const mk=LEC.tool==='marker', list=mk?MK_COLORS:PEN_COLORS;
+  openSheet(`<h3>🎨 ${mk?'マーカー':'ペン'}の色</h3><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(56px,1fr));gap:6px;margin-bottom:12px">
+    ${list.map(([c,n])=>`<button data-c="${c}" style="display:flex;flex-direction:column;align-items:center;gap:3px;padding:5px 2px;border-radius:12px"><span style="width:36px;height:36px;border-radius:50%;background:${c};box-shadow:0 0 0 1.5px var(--line) inset"></span><span style="font-size:11px;color:var(--sub)">${esc(n)}</span></button>`).join('')}</div>
+    <label class="btn sub" style="display:flex;align-items:center;gap:8px">＋ 好きな色<input type="color" id="lecCol" value="${mk?LEC.mk:LEC.pen}" style="width:34px;height:30px;border:0;padding:0;background:none"></label>`,
+    close=>{ const set=c=>{ if(mk) LEC.mk=c; else LEC.pen=c; lecTools(); close(); };
+      $('#sheet').querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>set(b.dataset.c)); $('#lecCol').onchange=e=>set(e.target.value); });
+}
 $('#lecBar').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.c){ LEC.color=b.dataset.c; lecTools(); return; }
+  if(b.dataset.c){ if(LEC.tool==='marker') LEC.mk=b.dataset.c; else { LEC.pen=b.dataset.c; if(!['pen','text','lasso'].includes(LEC.tool)) LEC.tool='pen'; } lecTools(); return; }
+  if(b.dataset.w){ if(LEC.tool==='marker') LEC.mkW=+b.dataset.w; else { LEC.penW=+b.dataset.w; LEC.tool='pen'; } lecTools(); return; }
+  if(b.dataset.lt){
+    const t=b.dataset.lt;
+    if(t==='sticker'){ pickSticker(false).then(ok=>{ if(ok){ LEC.tool='sticker'; lecTools(); toast(`${state.sticker.e} をはりたい所をタップ（もう一度タップではがす）`, 2200); } }); return; }
+    LEC.tool=t; if(t!=='lasso' && LEC.sel){ LEC.sel=null; lecRenderSel(); }
+    if(t==='text') toast('文字を書きたい所をタップ。書いた文字をタップでなおす', 2200);
+    if(t==='lasso') toast('囲むと、動かす・大きさ・複製・消すができます（画像も）', 2200);
+    lecTools(); return;
+  }
   const a=b.dataset.l;
-  if(a==='close'){ lecClose(); }
-  else if(a==='bg'){ lecSetBg(!LEC.bg); }
-  else if(a==='undo'){ if(LEC.rec?.state==='recording') LEC.ev.push({k:'undo', t:lecNow()}); else LEC.ev.pop(); lecDraw(); }
-  else if(a==='clear'){ if(LEC.rec?.state==='recording') LEC.ev.push({k:'clear', t:lecNow()}); else LEC.ev=[]; lecDraw(); }
+  if(a==='close') lecClose();
+  else if(a==='img') lecImgMenu();
+  else if(a==='pal') lecPalette();
+  else if(a==='orient'){ LEC.a = LEC.a<1 ? 4/3 : 0.75; LEC.vz=1; lecSize(); lecDraw(); lecTools(); }
+  else if(a==='fit'){ LEC.vz=1; lecView(); lecRes(); LEC.mode==='play' ? lecPaint(LEC.play?.lastT??Infinity) : lecPaint(); }
+  else if(a==='undo'){ LEC.sel=null; lecPush({k:'undo', t:lecNow()}); }
+  else if(a==='redo'){ LEC.sel=null; lecPush({k:'redo', t:lecNow()}); }
+  else if(a==='clear'){ if(LEC.items.length){ LEC.sel=null; lecPush({k:'er', t:lecNow(), ids:LEC.items.map(i=>i.id)}); toast('全部消しました（↶で戻せます）', 1600); } }
 });
 $('#lecCtl').addEventListener('click', async e=>{
   const b=e.target.closest('button'); if(!b || LEC.mode!=='rec') return; const a=b.dataset.l;
   if(a==='rec'){ if(LEC.rec?.state==='recording') lecStop(); else lecStart(); }
-  else if(a==='redo'){ LEC.audioBlob=null; LEC.ev=[]; LEC.t0=0; lecDraw(); lecTools(); }
-  else if(a==='preview'){ lecPlay({title:'確かめ', dur:LEC.dur, a:LEC.a, events:LEC.ev}, URL.createObjectURL(LEC.audioBlob), LEC.bg, true); }
+  else if(a==='again'){ LEC.audioBlob=null; LEC.ev=LEC.prep.slice(); LEC.t0=0; LEC.sel=null; lecDraw(); lecTools(); }
+  else if(a==='preview'){ lecPlay({title:'確かめ', dur:LEC.dur, a:LEC.a, events:LEC.ev}, URL.createObjectURL(LEC.audioBlob), null, true); }
   else if(a==='send'){ await lecSend(); }
 });
+function lecSrcs(evs){ const s=new Set(); const walk=a=>{ for(const e of a){ if(e.k==='img') s.add(e.src); else if(e.k==='grp') walk(e.evs); } }; walk(evs); return [...s]; }
 async function lecSend(){
   const title=await promptDlg('解説の名前（なくてもOK）', `${state.book?.name||''} ${LEC.target.p+1}ページ`.trim());
   if(title===null) return;
-  toast('解説を送っています…', 5000);
+  toast('解説を送っています…', 8000);
   try{
     const put=async(buf,mime)=>{ const id=await sha(buf); const r=await api(`api/blob/${id}?name=${encodeURIComponent(mime)}`,{method:'PUT', headers:{'content-type':mime}, body:buf}); if(!r.ok) throw 0; return id; };
     const abuf=await LEC.audioBlob.arrayBuffer(); const mime=(LEC.audioBlob.type||'audio/mp4').split(';')[0];
     const aud=await put(abuf, mime); await store.put('files','aud|'+aud, abuf);
-    let bg=null; if(LEC.bgBuf){ bg=await put(LEC.bgBuf,'image/jpeg'); await store.put('files','img|'+bg, LEC.bgBuf); }
-    const lid=uid('L'); const data={kind:'lec', id:lid, title:title.slice(0,60), dur:LEC.dur, a:LEC.a, aud, mime, bg, events:LEC.ev, updated:Date.now()};
-    const r=await api('api/kv?key='+encodeURIComponent('lec_'+lid),{method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify(data)});
+    const imgs=lecSrcs(LEC.ev);
+    for(const src of imgs){ const o=LEC.imgs.get(src); if(!o?.buf) continue; await put(o.buf,'image/jpeg'); await store.put('files','img|'+src, o.buf); }
+    const lid=uid('L'); const data={kind:'lec', v:2, id:lid, title:title.slice(0,60), dur:LEC.dur, a:LEC.a, aud, mime, bg:null, imgs, events:LEC.ev, updated:Date.now()};
+    const body=JSON.stringify(data); if(body.length>900000){ toast('解説が大きすぎて送れません。短く分けて録ってください', 5000); return; }
+    const r=await api('api/kv?key='+encodeURIComponent('lec_'+lid),{method:'PUT', headers:{'content-type':'application/json'}, body});
     if(!r.ok) throw 0;
     await store.put('ink','lec|'+lid, data);
     const {p, pt}=LEC.target;
@@ -2410,7 +2729,7 @@ function lecClose(force){
   try{ LEC.rec?.state==='recording' && LEC.rec.stop(); }catch{} clearInterval(LEC.timer);
   try{ LEC.stream?.getTracks().forEach(t=>t.stop()); }catch{}
   if(LEC.play){ LEC.play.audio?.pause(); cancelAnimationFrame(LEC.play.raf); }
-  LEC.mode=null; LEC.play=null; $('#lec').classList.add('hidden');
+  LEC.mode=null; LEC.play=null; LEC.sel=null; $('#lecSel')?.remove(); $('#lec').classList.add('hidden');
 }
 // 再生
 async function openLecture(it){
@@ -2418,13 +2737,15 @@ async function openLecture(it){
   if(!d && Cloud.mode==='cf'){ d=await Cloud.get('lec_'+it.lec); if(d) store.put('ink','lec|'+it.lec, d).catch(()=>{}); }
   if(!d){ toast('解説を読みこめませんでした'); return; }
   const au=await audURL({aud:d.aud, mime:d.mime}); const bg=d.bg ? await imgURL(d.bg) : null;
+  LEC.imgs=new Map(); LEC.tbox=new Map();
+  for(const src of (d.imgs||[])){ try{ const u=await imgURL(src); if(u) await lecLoadImg(src, u); }catch{} }
   if(!state.viewOnly) markHeard(it.id);
   lecPlay(d, au, bg, false);
 }
 function lecPlay(d, audioUrl, bgUrl, preview){
   if(LEC.play){ LEC.play.audio?.pause(); cancelAnimationFrame(LEC.play.raf); }
   const keepRec = preview ? {mode:LEC.mode, ev:LEC.ev, a:LEC.a, bg:LEC.bg} : null;
-  LEC.mode='play'; LEC.ev=d.events; LEC.a=d.a||0.75;
+  LEC.mode='play'; LEC.ev=d.events; LEC.a=d.a||0.75; LEC.vz=1; LEC.vx=0; LEC.vy=0; $('#lecSel')?.remove();
   $('#lec').classList.remove('hidden');
   if(bgUrl) $('#lecBg').src=bgUrl; else $('#lecBg').removeAttribute('src');
   lecSize();
@@ -2436,7 +2757,7 @@ function lecPlay(d, audioUrl, bgUrl, preview){
     <span id="lecT" style="font-weight:800;min-width:96px">0:00 / ${fmtSec(dur)}</span><button class="pill" data-p="rate">1倍</button>
     ${preview?'<button class="btn" data-p="backrec">録画にもどる</button>':''}`;
   const now=()=> audio ? audio.currentTime : (P.clock ? (performance.now()-P.clock)/1000*P.rate + P.t : P.t);
-  const tick=()=>{ const t=now(); lecDraw(t*1000); const s=$('#lecSeek'); if(s && document.activeElement!==s) s.value=t; const tt=$('#lecT'); if(tt) tt.textContent=`${fmtSec(Math.min(t,dur))} / ${fmtSec(dur)}`;
+  const tick=()=>{ const t=now(); P.lastT=t*1000; lecDraw(t*1000); const s=$('#lecSeek'); if(s && document.activeElement!==s) s.value=t; const tt=$('#lecT'); if(tt) tt.textContent=`${fmtSec(Math.min(t,dur))} / ${fmtSec(dur)}`;
     if(t>=dur && !audio){ P.t=dur; P.clock=null; setPP(false); return; } P.raf=requestAnimationFrame(tick); };
   const setPP=on=>{ const b=$('#lecCtl [data-p=pp]'); if(b){ b.textContent=on?'❚❚':'▶'; } };
   const play=async()=>{ if(audio){ try{ await audio.play(); }catch{ toast('音声を再生できませんでした'); } } else { P.clock=performance.now(); } setPP(true); cancelAnimationFrame(P.raf); tick(); };
@@ -2447,7 +2768,7 @@ function lecPlay(d, audioUrl, bgUrl, preview){
     if(a==='pp'){ const playingNow = audio ? !audio.paused : !!P.clock; playingNow ? pause() : play(); }
     else if(a==='back'){ if(audio) audio.currentTime=Math.max(0,audio.currentTime-10); else P.t=Math.max(0,now()-10), P.clock=P.clock&&performance.now(); lecDraw(now()*1000); }
     else if(a==='rate'){ P.rate = P.rate===1?1.5:P.rate===1.5?2:1; if(audio) audio.playbackRate=P.rate; b.textContent=P.rate+'倍'; }
-    else if(a==='backrec'){ pause(); cancelAnimationFrame(P.raf); const k=P.keepRec; LEC.play=null; LEC.mode=k.mode; LEC.ev=k.ev; LEC.a=k.a; if(k.bg) $('#lecBg').src=k.bg; else $('#lecBg').removeAttribute('src'); lecSize(); lecDraw(); lecTools(); $('#lecCtl').onclick=null; }
+    else if(a==='backrec'){ pause(); cancelAnimationFrame(P.raf); const k=P.keepRec; LEC.play=null; LEC.mode=k.mode; LEC.ev=k.ev; LEC.a=k.a; LEC.vz=1; if(k.bg) $('#lecBg').src=k.bg; else $('#lecBg').removeAttribute('src'); lecSize(); lecDraw(); lecTools(); $('#lecCtl').onclick=null; }
   };
   $('#lecSeek').oninput=e=>{ const t=+e.target.value; if(audio) audio.currentTime=t; else { P.t=t; if(P.clock) P.clock=performance.now(); } lecDraw(t*1000); };
   lecDraw(0); play();
@@ -2848,6 +3169,212 @@ async function testPush(){
   try{ const r=await api('api/push/test',{method:'POST'}); const j=await r.json(); toast(j.devices ? `🔔 ${j.devices}台にテスト通知を送りました` : '通知を受け取る端末がまだありません', 3500); }catch{ toast('送れませんでした'); }
 }
 
+
+/* ================= 🔍 問題の自動検出（PDFの文字情報から） ================= */
+const toHalf = s => s.replace(/[０-９]/g, c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0));
+const MARKERS = [
+  /^(第\s*[0-9０-９]+\s*問|問題?\s*[0-9０-９]+)/,
+  /^[\[［【〔]\s*[0-9０-９]{1,2}\s*[\]］】〕]/,
+  /^[（(]\s*[0-9０-９]{1,2}\s*[)）]/,
+  /^[①-⑳]/,
+  /^[0-9０-９]{1,2}\s*[.．]\s*\S/
+];
+async function detectProblemsOn(pdf, pi){
+  const page=await pdf.getPage(pi+1); const vp=page.getViewport({scale:1}); const k=10000/vp.width, H=10000*vp.height/vp.width;
+  const tc=await page.getTextContent(); const its=[];
+  for(const it of tc.items){
+    if(!it.str || !it.str.trim()) continue;
+    const [a,b,c,d,e,f]=it.transform; const la=Math.hypot(a,b)||1, fh=Math.hypot(c,d)||1;
+    const p1=vp.convertToViewportPoint(e,f), p2=vp.convertToViewportPoint(e+a/la*(it.width||0), f+b/la*(it.width||0)), p3=vp.convertToViewportPoint(e+c/fh*fh, f+d/fh*fh);
+    const xs=[p1[0],p2[0],p3[0]], ys=[p1[1],p2[1],p3[1]];
+    const x=Math.min(...xs)*k, y=Math.min(...ys)*k, w=(Math.max(...xs)-Math.min(...xs))*k, h=Math.max(8,(Math.max(...ys)-Math.min(...ys))*k);
+    its.push({s:it.str, x, y, w, h, horiz: Math.abs(p2[0]-p1[0]) >= Math.abs(p2[1]-p1[1])});
+  }
+  if(its.length<3) return {none:true};
+  if(its.filter(i=>i.y<H*.15).some(i=>/^\s*(解答|答え|こたえ|解説)/.test(i.s))) return {regions:[], answers:true};
+  // 行にまとめる
+  its.sort((p,q)=>(p.y+p.h/2)-(q.y+q.h/2)); const lines=[];
+  for(const it of its){
+    const cy=it.y+it.h/2;
+    const ln=lines.find(l=>Math.abs(l.cy-cy)<Math.min(l.h,it.h)*.6 && it.x>=l.x-200 ? (it.x < l.x ? l.x-(it.x+it.w) < 400 : it.x-(l.x+l.w) < 400) : false);
+    if(ln){ ln.items.push(it); const x2=Math.max(ln.x+ln.w,it.x+it.w); ln.x=Math.min(ln.x,it.x); ln.w=x2-ln.x; const y2=Math.max(ln.y+ln.h,it.y+it.h); ln.y=Math.min(ln.y,it.y); ln.h=y2-ln.y; ln.cy=ln.y+ln.h/2; }
+    else lines.push({items:[it], x:it.x, y:it.y, w:it.w, h:it.h, cy});
+  }
+  for(const l of lines){ l.items.sort((p,q)=>p.x-q.x); l.text=l.items.map(i=>i.s).join('').trim(); }
+  // ページ番号などの下の飾りを外す
+  const body=lines.filter(l=>!(l.y>H*.92 && l.text.length<=8) && !(l.y+l.h<H*.04 && l.text.length<=8));
+  if(!body.length) return {none:true};
+  const cL=Math.min(...body.map(l=>l.x)), cR=Math.max(10000-cL, ...body.map(l=>l.x+l.w)), cB=Math.max(...body.map(l=>l.y+l.h)), cW=cR-cL;
+  let level=-1, marks=[];
+  for(let i=0;i<MARKERS.length;i++){
+    const m=body.filter(l=>MARKERS[i].test(l.text)).map(l=>({l, label:toHalf(l.text.match(MARKERS[i])[0]).replace(/\s/g,'')}));
+    if(m.length>=(i===0?1:2)){ level=i; marks=m; break; }
+  }
+  if(level<0) return {regions:[]};
+  // 段組み（左右2列など）を見分ける
+  const xsorted=[...marks].sort((p,q)=>p.l.x-q.l.x); const cols=[[xsorted[0]]];
+  for(const m of xsorted.slice(1)){ const c=cols[cols.length-1]; if(m.l.x - c[0].l.x > cW*.3) cols.push([m]); else c.push(m); }
+  const pad=120, out=[];
+  cols.forEach((col,ci)=>{
+    const left=Math.min(...col.map(m=>m.l.x)); const right = ci<cols.length-1 ? Math.min(...cols[ci+1].map(m=>m.l.x))-pad*2 : cR;
+    const ms=col.filter(m=>m.l.x <= left + cW*.08).sort((p,q)=>p.l.y-q.l.y);
+    ms.forEach((m,i)=>{
+      const top=m.l.y-pad;
+      let bot;
+      if(i<ms.length-1) bot=ms[i+1].l.y-pad*1.5;
+      else { const below=body.filter(l=>l.y>m.l.y && l.x>=left-pad && l.x<right); bot=Math.max(m.l.y+m.l.h*4, ...below.map(l=>l.y+l.h)) + pad; bot=Math.max(bot, Math.min(H*.93, cB+pad*6)); }
+      const x=Math.max(0,left-pad), y=Math.max(0,top), w=Math.min(10000,right+pad)-x, h=Math.min(H,bot)-y;
+      if(w>500 && h>250) out.push({x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), label:m.label});
+    });
+  });
+  return {regions:out};
+}
+async function autoDetect(){
+  if(!state.book || !state.pdf) return;
+  const sh=state.shared, b=state.book.id;
+  const scope=await openSheet(`<h3>🔍 問題を自動で見つける</h3><p class="note" style="margin-bottom:12px">PDFの文字（問1、(2)、①、［3］など）から1問ずつのわくを作ります。すでにわくがあるページはそのままです。</p>
+    <div class="grid2"><button class="btn sub" data-a="page" style="height:56px">このページ</button><button class="btn" data-a="all" style="height:56px">全ページ</button></div>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(x=>x.onclick=()=>close(x.dataset.a)));
+  if(!scope) return;
+  const pages = scope==='page' ? [state.curPage] : [...Array(state.book.pages).keys()];
+  const added=[]; let skipped=0, noText=0; let n=Math.max(0,...sh.problems.map(q=>q.n||0));
+  toast('さがしています…', 20000);
+  for(const p of pages){
+    if(sh.problems.some(q=>q.p===p)){ skipped++; continue; }
+    let r; try{ r=await detectProblemsOn(state.pdf, p); }catch(e){ console.warn(e); continue; }
+    if(r.none){ noText++; continue; }
+    for(const g of r.regions) added.push({id:uid('q'), p, x:g.x, y:g.y, w:g.w, h:g.h, n:++n, label:g.label});
+  }
+  const redraw=()=>{ for(const pg of state.pages) if(pg.rendered) renderOverlay(pg); };
+  if(!added.length){
+    toast(noText===pages.length ? '文字の情報がないPDF（スキャン）のようです。🔲 問題わくで囲んでください' : skipped===pages.length ? 'すでに問題わくがあります' : '見つかりませんでした。🔲 問題わくで囲んでください', 4500); return;
+  }
+  const redo=()=>{ sh.problems.push(...added); saveShared(b); redraw(); };
+  const undo=()=>{ sh.problems=sh.problems.filter(q=>!added.includes(q)); saveShared(b); redraw(); refreshDue(); };
+  redo(); pushUndo({undo,redo});
+  toast(`🔍 ${added.length}問 みつけました${skipped?`（わくのある${skipped}ページはそのまま）`:''}。ちがうわくは🔲で消せます。↶で全部もどせます`, 5000);
+}
+
+/* ================= 📖 答えのページ（横に並べて表示） ================= */
+const ANS={open:false, b:null, p:0, zoom:1, gen:0, side:'right'};
+function ansCfg(){ const sh=state.shared; if(!sh.ans) sh.ans={b:null, map:{}}; if(!sh.ans.map) sh.ans.map={}; return sh.ans; }
+function ansGuess(p){
+  const a=ansCfg(); if(a.map[p]!=null) return {p:a.map[p], linked:true};
+  const prev=Object.keys(a.map).map(Number).filter(x=>x<p).sort((x,y)=>y-x)[0];
+  if(prev!=null) return {p:a.map[prev], linked:false};
+  return {p:a.start ?? 0, linked:false};
+}
+async function chooseAnsBook(){
+  const a=ansCfg(); const others=[...state.sharedAll.entries()].filter(([id,v])=>id!==state.book.id && v?.name);
+  const pick=await openSheet(`<h3>📖 答えはどこにある？</h3>
+    <button class="opt" data-b=""><span>この問題集の中（うしろの方のページ）</span><span>📘</span></button>
+    ${others.map(([id,v])=>`<button class="opt" data-b="${esc(id)}"><span>別のPDF：${esc(v.name)}</span><span>📗</span></button>`).join('')}
+    <p class="note" style="margin-top:8px">答えが別のPDFなら、先に本棚に入れておいてください。</p>`,
+    close=>$('#sheet').querySelectorAll('[data-b]').forEach(x=>x.onclick=()=>close({b:x.dataset.b||null})));
+  if(!pick) return false;
+  const total = pick.b ? (state.sharedAll.get(pick.b)?.pages||0) : state.book.pages;
+  const v=await promptDlg(`このページ（${state.curPage+1}ページ）の答えは何ページ？（1〜${total}）`, '', 'number'); const n=parseInt(v,10);
+  if(!(n>=1 && n<=total)){ if(v!==null) toast('ページの数字を入れてください'); return false; }
+  a.b=pick.b; a.map={}; a.map[state.curPage]=n-1; a.start=n-1; saveShared(state.book.id); return true;
+}
+async function openAnswer(){
+  if(!state.book) return;
+  const a=ansCfg();
+  if(!state.viewOnly && state.settings.ansLock && !(ANS.until>Date.now())){
+    if(!(await askPin('答えを見るには、おうちの人のパスコード'))) return;
+    ANS.until=Date.now()+10*60*1000;
+  }
+  if(a.b===undefined || (a.b===null && !Object.keys(a.map).length && a.start==null)){ if(!(await chooseAnsBook())) return; }
+  ANS.open=true; $('#ansPanel').classList.remove('hidden'); document.body.classList.add('ansOpen');
+  await ansShow(ansGuess(state.curPage).p);
+}
+function closeAnswer(){ ANS.open=false; ANS.gen++; $('#ansPanel').classList.add('hidden'); document.body.classList.remove('ansOpen'); }
+async function ansShow(p, remember=false){
+  const a=ansCfg(); const b=a.b||state.book.id; const gen=++ANS.gen;
+  const pdf= b===state.book.id ? state.pdf : await getPdfFor(b).catch(()=>null);
+  const body=$('#ansBody');
+  if(!pdf){ body.innerHTML='<div class="loading">答えのPDFがこの端末にありません。本棚に入れてください。</div>'; return; }
+  p=Math.max(0, Math.min(pdf.numPages-1, p)); ANS.p=p;
+  if(remember){ a.map[state.curPage]=p; saveShared(state.book.id); }
+  const linked=a.map[state.curPage]===p;
+  $('#ansTitle').innerHTML=`📖 答え ${p+1}ページ ${linked?'':'<span class="s">（◀▶で合わせると覚えます）</span>'}`;
+  const page=await pdf.getPage(p+1); if(gen!==ANS.gen) return;
+  const extra=(b===state.book.id ? state.shared.rot?.[p] : state.sharedAll.get(b)?.rot?.[p])||0;
+  const W=Math.max(200, body.clientWidth-12)*ANS.zoom; const vp1=page.getViewport({scale:1, rotation:((page.rotate||0)+extra)%360});
+  const scale=W/vp1.width, ratio=Math.min(3, (window.devicePixelRatio||1)*1.2);
+  const vp=page.getViewport({scale:scale*ratio, rotation:((page.rotate||0)+extra)%360});
+  const cv=document.createElement('canvas'); cv.width=Math.floor(vp.width); cv.height=Math.floor(vp.height); cv.style.width=W+'px'; cv.style.height=(vp.height/ratio)+'px';
+  const ctx=cv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cv.width,cv.height);
+  try{ await page.render({canvasContext:ctx, viewport:vp}).promise; }catch(e){ return; }
+  if(gen!==ANS.gen) return; body.innerHTML=''; body.appendChild(cv);
+}
+function ansFollow(){ if(!ANS.open) return; const g=ansGuess(state.curPage); if(g.p!==ANS.p) ansShow(g.p); else ansShow(ANS.p); }
+$('#ansPanel').addEventListener('click', async e=>{
+  const a=e.target.closest('button')?.dataset.an; if(!a) return;
+  if(a==='x') closeAnswer();
+  else if(a==='prev') ansShow(ANS.p-1, true);
+  else if(a==='next') ansShow(ANS.p+1, true);
+  else if(a==='in'){ ANS.zoom=Math.min(4, ANS.zoom*1.4); ansShow(ANS.p); }
+  else if(a==='out'){ ANS.zoom=Math.max(1, ANS.zoom/1.4); ansShow(ANS.p); }
+  else if(a==='side'){ ANS.side=ANS.side==='right'?'bottom':'right'; $('#ansPanel').dataset.side=ANS.side; ansShow(ANS.p); }
+  else if(a==='set'){ if(await chooseAnsBook()) ansShow(ansGuess(state.curPage).p); }
+  else if(a==='ok'){ ansShow(ANS.p, true); toast(`${state.curPage+1}ページの答え＝${ANS.p+1}ページ と覚えました`, 2200); }
+});
+$('#btnAns').onclick=()=> ANS.open ? closeAnswer() : openAnswer();
+
+
+/* ================= ↕️ すきま（おうちの人から）：操作を子どもの端末に送って、子どもの書きこみと同じようにずらす ================= */
+function gapOpApply(p, op, doInk, doAdv){
+  const rec=getInk(p); rec.gaps=(rec.gaps||[]).slice().sort((a,b)=>a.y-b.y);
+  const lists=[]; if(doInk) lists.push(rec.items); if(doAdv) lists.push(getAdv(p).items);
+  if(op.k==='add'){ for(const L of lists) for(const it of L) if(itemMinY(it)>=op.yE) shiftItem(it, op.h); rec.gaps.push({y:op.yB, h:op.h}); }
+  else {
+    let off=0, g=null; for(const q of rec.gaps){ if(q.y===op.y){ g=q; break; } off+=q.h; }
+    if(!g) return false; const top=g.y+off, bottom=top+g.h;
+    if(op.k==='size'){ for(const L of lists) for(const it of L) if(itemMinY(it)>=bottom) shiftItem(it, op.dh); g.h+=op.dh; }
+    else if(op.k==='del'){
+      for(const L of lists) for(let i=L.length-1;i>=0;i--){ const y=itemMinY(L[i]); if(y>=top && y<bottom) L.splice(i,1); else if(y>=bottom) shiftItem(L[i], -g.h); }
+      rec.gaps=rec.gaps.filter(q=>q!==g);
+    }
+  }
+  rec.gaps.sort((a,b)=>a.y-b.y); return true;
+}
+function parentGapSend(p, op){
+  const b=state.book.id, L=state.learner;
+  if(!gapOpApply(p, op, true, true)) return;
+  saveAdv(p); relayoutPage(p);
+  Live.send({t:'gapOp', L, b, p, op});
+  const r=getInk(p); r.updated=Date.now(); store.put('ink', inkKey(b,p,L), r).catch(()=>{});
+  Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[], gaps:r.gaps||[]});
+}
+async function parentGapAt(pg, pt){
+  const p=pg.i; if(pageRot(p)){ toast('回転したページには、すきまを入れられません'); return; }
+  const gaps=pageGaps(p); let off=0, hit=null;
+  for(const q of gaps){ const s=q.y+off; if(pt.y>=s && pt.y<s+q.h){ hit=q; break; } off+=q.h; }
+  if(hit){
+    const r=await openSheet(`<h3>↕️ すきま</h3><div class="grid2" style="margin-bottom:10px"><button class="btn sub" data-a="more">もっと広く</button><button class="btn sub" data-a="less">せまく</button></div>
+      <div class="grid2"><button class="btn red" data-a="del">すきまを消す</button><button class="btn" data-a="0">とじる</button></div>`,
+      close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+    if(!r || r==='0') return;
+    if(r==='del'){ if(!(await confirmDlg('すきまを消す','このすきまに書いたもの（子どもの書きこみも）が消えます。','消す',true))) return; parentGapSend(p, {k:'del', y:hit.y}); return; }
+    const dh = r==='more' ? Math.round(hit.h*.5) : -Math.min(hit.h-800, Math.round(hit.h/3)); if(!dh) return;
+    parentGapSend(p, {k:'size', y:hit.y, dh});
+    pushUndo({undo:()=>parentGapSend(p, {k:'size', y:hit.y, dh:-dh}), redo:()=>parentGapSend(p, {k:'size', y:hit.y, dh})});
+    return;
+  }
+  const yB=e2b(pg.g, pt.y); if(yB==null) return;
+  const op={k:'add', yB:Math.round(yB), yE:Math.round(pt.y), h:2600};
+  parentGapSend(p, op);
+  pushUndo({undo:()=>parentGapSend(p, {k:'del', y:op.yB}), redo:()=>parentGapSend(p, op)});
+  toast('↕️ すきまを入れました（子どもの画面にも入ります）', 2600);
+}
+
+/* ================= 📝 メモの共有：開く／閉じるを相手に伝える。おうちの人の書きこみはアドバイスとしてメモに重ねる ================= */
+const advMemo = p => (getAdv(p).memo ||= []);
+function sendMemoState(open){
+  if(Cloud.mode!=='cf' || !state.book) return;
+  Live.send({t:'memo', L:state.learner, b:state.book.id, p:memoPage, open, from:state.viewOnly?'parent':'child'});
+}
 
 /* ================= boot ================= */
 guardStylus($('#pages'));
