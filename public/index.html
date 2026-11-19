@@ -168,6 +168,15 @@ body.viewing #advTools{display:flex}
 .ov>.advtx{height:auto;font-size:calc(var(--fs) * var(--u) * 1px);color:var(--c);background:rgba(255,255,255,.9);border:2px solid var(--c);
   border-radius:10px;padding:.25em .45em;font-weight:700;line-height:1.4;white-space:pre-wrap;word-break:break-all;box-shadow:0 2px 6px rgba(0,0,0,.12)}
 .ov>.advtx::before{content:"💬 ";font-size:.8em}
+.ov>.advau{width:auto;height:auto;pointer-events:auto;display:flex;align-items:center;gap:6px;padding:8px 14px 8px 10px;border-radius:24px;
+  background:#0a9b5c;color:#fff;font-weight:800;font-size:17px;box-shadow:0 3px 10px rgba(0,0,0,.25);cursor:pointer;transform:translate(-50%,-50%);touch-action:manipulation}
+.ov>.advau .ic{font-size:20px}
+.ov>.advau.new{animation:aupulse 1.4s ease-in-out infinite}
+.ov>.advau.new::after{content:"NEW";font-size:10px;background:#ffd23f;color:#5a4300;border-radius:8px;padding:1px 5px;margin-left:2px}
+.ov>.advau.play{background:#e11d48}
+@keyframes aupulse{0%,100%{box-shadow:0 0 0 0 rgba(10,155,92,.55)}50%{box-shadow:0 0 0 12px rgba(10,155,92,0)}}
+.recbtn{width:96px;height:96px;border-radius:50%;background:#fff;border:6px solid #e11d48;color:#e11d48;font-size:40px;font-weight:900}
+.recbtn.on{background:#e11d48;color:#fff;animation:aupulse 1.2s infinite}
 .ov>.advimg{border:3px solid #0a9b5c;border-radius:8px;background:#fff;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.18)}
 #btnAdv.on{background:#e7f7ef;outline:2px solid #0a9b5c}
 .lightbox{position:fixed;inset:0;z-index:70;background:rgba(10,15,25,.9);display:flex;align-items:center;justify-content:center}
@@ -479,6 +488,11 @@ const Live = {
   },
   send(m){ if(this.open && this.ws?.readyState===1){ try{ this.ws.send(JSON.stringify(m)); }catch{} } },
   // 書いている途中の線は、0.08秒に1回だけ送る
+  // 書き終えたら、まだ送っていない「途中の線」を捨て、終わりの合図を送る（遅れて届いた途中の線が残るのを防ぐ）
+  endLive(info){
+    clearTimeout(this.timer); this.timer=null; this.pending=null;
+    if(info && this.open && (!state.viewOnly || info.area==='adv')) this.send({t:'liveEnd', L:state.learner, b:state.book?.id, ...info});
+  },
   sendLive(m){
     if(!this.open || (state.viewOnly && m.area!=='adv')) return;
     this.pending=m; const now=Date.now();
@@ -860,13 +874,14 @@ function onUp(e, cancel){
   const c=cur; cur=null; finishCur(c, cancel);
 }
 function finishCur(c, cancel){
+  if(c.kind==='stroke' && c.T.liveInfo && Cloud.mode==='cf') Live.endLive(c.T.liveInfo());
   try{
     if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return; c.T.addStroke(c.item); }
     else if(c.kind==='erase'){ if(c.removed.length) c.T.commitErase(c.removed); }
     else if(c.kind==='rect'){ c.rb.remove(); const r=normRect(c.x0,c.y0,c.last.x,c.last.y); if(!cancel && r.w>120 && r.h>80) c.T.rect(c.tool, r); }
   }catch(err){ console.warn(err); }
 }
-function abortCur(){ if(!cur) return; if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
+function abortCur(){ if(!cur) return; if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
 function eraseAt(c, pt){
   const items=c.T.items(); let ch=false;
   for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
@@ -1000,6 +1015,7 @@ function renderOverlay(pg){
     const d=document.createElement('img'); d.className='advimg'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
     d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--h:${t.h}`; d.alt='';
     imgURL(t.img).then(u=>{ if(u) d.src=u; }); ov.appendChild(d); }
+  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k==='au') ov.appendChild(audBubble(pg, t)); }
 }
 function addDel(d, fn){ const x=document.createElement('div'); x.className='del'; x.textContent='×'; x.addEventListener('pointerdown', e=>{ e.stopPropagation(); e.preventDefault(); fn(); }); d.appendChild(x); }
 function removeShared(list, obj, p){
@@ -1061,6 +1077,7 @@ function pageTarget(pg){
       }
     },
     tap(pt, e){
+      if(state.viewOnly && state.advTool==='aaud'){ advAudioAt(pg, pt); return; }
       if(state.viewOnly && (state.advTool==='atext'||state.advTool==='aimg')){ advTextAt(pg, pt, e); return; }
       if(e && !state.advHidden){ const h=advHit(pg,e); if(h?.k==='im'){ imgURL(h.img).then(u=>u&&showLightbox(u)); return; } }
       const hit = state.shared.masks.filter(m=>m.p===p && pt.x>=m.x && pt.x<=m.x+m.w && pt.y>=m.y && pt.y<=m.y+m.h);
@@ -1754,7 +1771,7 @@ async function pushBookToCloud(id, buf){
 }
 async function pushAllBooksToCloud(){
   if(Cloud.mode!=='cf') return;
-  for(const [id] of await store.all('files')){ if(String(id).startsWith('img|')) continue; if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
+  for(const [id] of await store.all('files')){ if(String(id).startsWith('img|') || String(id).startsWith('aud|')) continue; if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
 }
 
 /* ================= パスコード画面 ================= */
@@ -1834,11 +1851,16 @@ function viewLiveCanvas(pg){
   if(pg.vlive.parentNode!==pg.el) pg.el.insertBefore(pg.vlive, pg.ov);
   return pg.vlive;
 }
+// 念のため：途中の線が4秒とどかなければ消す
+const liveClearT=new Map();
+function armLiveClear(p){ clearTimeout(liveClearT.get(p)); liveClearT.set(p, setTimeout(()=>{ clearViewLive(p); if(state.memoOpen && memoPage===p) drawMemo(); }, 4000)); }
 function clearViewLive(p){ const pg=state.pages[p]; if(pg?.vlive){ pg.vlive.getContext('2d').clearRect(0,0,pg.vlive.width,pg.vlive.height); } }
 async function onLiveMsg(m){
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
   if(m.L && m.L!==state.learner) return;
+  if(m.t==='liveEnd'){ clearViewLive(m.p); if(m.area==='memo' && state.memoOpen && memoPage===m.p) drawMemo(); return; }
+  if(m.t==='live') armLiveClear(m.p);
   if(m.t==='adv'){ setAdvRec(m.b, m.p, m.rec, true); return; }
   if(m.t==='live' && m.area==='adv'){
     if(state.viewOnly || state.advHidden || state.book?.id!==m.b || !m.item) return;
@@ -1893,7 +1915,8 @@ function setAdvRec(b, p, rec, notify){
   state.adv.set(p, rec);
   const pg=state.pages[p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } clearViewLive(p);
   if(notify && !state.viewOnly && (rec.items?.length||0)>before){
-    toast(`💬 アドバイスがとどいたよ（${p+1}ページ）`, 2800);
+    const last=rec.items[rec.items.length-1];
+    toast(last?.k==='au' ? `🔊 音声のアドバイスがとどいたよ（${p+1}ページ）。タップで聞けます` : `💬 アドバイスがとどいたよ（${p+1}ページ）`, 3200);
     if(state.settings.sound){ tone(880,0,.15,'sine',.1); tone(1175,.12,.25,'sine',.1); }
     if(state.advHidden){ state.advHidden=false; state.pages.forEach(pg=>{ drawInk(pg); renderOverlay(pg); }); }
   }
@@ -1973,14 +1996,14 @@ $('#advImgFile').onchange=async e=>{
 function renderAdvTools(){
   const t=state.advTool;
   const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
-  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aerase','🧽','消す')
+  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('aerase','🧽','消す')
     + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
     + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
   document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); renderAdvTools(); }
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
 });
@@ -1988,6 +2011,85 @@ $('#advTools').addEventListener('click', e=>{
 function showLightbox(url){
   const d=document.createElement('div'); d.className='lightbox'; d.innerHTML=`<img src="${url}"><button class="ib">✕</button>`;
   d.onclick=()=>d.remove(); document.body.appendChild(d);
+}
+
+
+/* ================= 音声アドバイス（おうちの人が録音 → 子どもがタップで聞く） ================= */
+const audURLs=new Map(); let playing=null;
+async function audURL(it){
+  if(audURLs.has(it.aud)) return audURLs.get(it.aud);
+  let buf=await store.get('files','aud|'+it.aud);
+  if(!buf && Cloud.mode==='cf'){ try{ const r=await api('api/blob/'+it.aud); if(r.ok){ buf=await r.arrayBuffer(); store.put('files','aud|'+it.aud, buf).catch(()=>{}); } }catch{} }
+  if(!buf) return null;
+  const u=URL.createObjectURL(new Blob([buf],{type:it.mime||'audio/mp4'})); audURLs.set(it.aud,u); return u;
+}
+const heard = (()=>{ try{ return new Set(JSON.parse(localStorage.getItem('tk_heard')||'[]')); }catch{ return new Set(); } })();
+function markHeard(id){ heard.add(id); try{ localStorage.setItem('tk_heard', JSON.stringify([...heard].slice(-500))); }catch{} }
+const fmtSec = s => `${Math.floor(s/60)}:${String(Math.round(s)%60).padStart(2,'0')}`;
+async function playAud(it, el){
+  if(playing){ playing.a.pause(); playing.el?.classList.remove('play'); const same=playing.id===it.id; playing=null; if(same) return; }
+  const u=await audURL(it); if(!u){ toast('音声を読みこめませんでした'); return; }
+  const a=new Audio(u); playing={a, el, id:it.id}; el?.classList.add('play');
+  a.onended=()=>{ el?.classList.remove('play'); if(playing?.a===a) playing=null; };
+  try{ await a.play(); }catch{ toast('音声を再生できませんでした'); el?.classList.remove('play'); playing=null; return; }
+  if(!state.viewOnly){ markHeard(it.id); el?.classList.remove('new'); }
+}
+function audBubble(pg, t){
+  const d=document.createElement('div'); d.className='advau'+(!state.viewOnly && !heard.has(t.id)?' new':''); d.dataset.id=t.id;
+  const pt=toD(pg.g,t.x,t.y); d.style.cssText=`--x:${pt.x};--y:${pt.y}`;
+  d.innerHTML=`<span class="ic">🔊</span><span>${fmtSec(t.dur||0)}</span>`;
+  d.addEventListener('pointerdown', e=>{ e.stopPropagation(); });
+  d.addEventListener('click', async e=>{
+    e.stopPropagation();
+    if(state.viewOnly && state.advTool!=='hand'){
+      const r=await openSheet(`<h3>🔊 音声アドバイス（${fmtSec(t.dur||0)}）</h3><div class="grid2"><button class="btn sub" data-a="play">▶ 聞く</button><button class="btn red" data-a="del">けす</button></div>`,
+        close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+      if(r==='play') playAud(t, d); else if(r==='del') advReplace(pg.i, t, null);
+      return;
+    }
+    playAud(t, d);
+  });
+  return d;
+}
+// 録音シート
+function pickMime(){ for(const m of ['audio/mp4','audio/webm;codecs=opus','audio/webm']) if(window.MediaRecorder?.isTypeSupported?.(m)) return m; return ''; }
+async function recordSheet(){
+  if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ toast('この画面では録音できません'); return null; }
+  let stream; try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }catch{ toast('マイクが使えません。ブラウザの設定でマイクを許可してください', 5000); return null; }
+  const mime=pickMime(); let rec, chunks=[], t0=0, timer=null, blob=null, dur=0;
+  const stop=()=>{ try{ rec?.state==='recording' && rec.stop(); }catch{} clearInterval(timer); };
+  const res=await openSheet(`<h3>🎤 音声でアドバイス</h3>
+    <p class="note" style="margin-bottom:10px">いちばん長くて2分です。録音したら、聞きなおしてから送れます。</p>
+    <div style="text-align:center;margin:8px 0 16px"><button id="recBtn" class="recbtn">●</button><div id="recTime" style="font-size:22px;font-weight:800;margin-top:8px">0:00</div></div>
+    <div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn" data-a="1" id="recSend" disabled style="opacity:.4">送る</button></div>
+    <button class="opt" id="recPlay" style="justify-content:center;display:none">▶ 聞きなおす</button>`,
+    close=>{
+      const btn=$('#recBtn'), tm=$('#recTime');
+      btn.onclick=()=>{
+        if(rec?.state==='recording'){ stop(); return; }
+        chunks=[]; blob=null; $('#recSend').disabled=true; $('#recSend').style.opacity=.4; $('#recPlay').style.display='none';
+        rec=new MediaRecorder(stream, mime?{mimeType:mime}:undefined);
+        rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+        rec.onstop=()=>{ dur=(Date.now()-t0)/1000; blob=new Blob(chunks,{type:rec.mimeType||mime||'audio/mp4'}); btn.classList.remove('on'); btn.textContent='●';
+          $('#recSend').disabled=false; $('#recSend').style.opacity=1; $('#recPlay').style.display='flex'; };
+        rec.start(250); t0=Date.now(); btn.classList.add('on'); btn.textContent='■';
+        timer=setInterval(()=>{ const s=(Date.now()-t0)/1000; tm.textContent=fmtSec(s); if(s>=120) stop(); }, 200);
+      };
+      $('#recPlay').onclick=()=>{ if(blob) new Audio(URL.createObjectURL(blob)).play().catch(()=>{}); };
+      $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ stop(); close(b.dataset.a==='1' && blob ? 'send' : null); });
+    });
+  stop(); stream.getTracks().forEach(t=>t.stop());
+  if(res!=='send' || !blob) return null;
+  return {blob, dur:Math.round(dur)};
+}
+async function advAudioAt(pg, pt){
+  const r=await recordSheet(); if(!r) return;
+  const buf=await r.blob.arrayBuffer(); const id=await sha(buf); const mime=(r.blob.type||'audio/mp4').split(';')[0];
+  await store.put('files','aud|'+id, buf);
+  toast('音声を送っています…', 3000);
+  if(Cloud.mode==='cf'){ try{ const x=await api(`api/blob/${id}?name=${encodeURIComponent(mime)}`,{method:'PUT', headers:{'content-type':mime}, body:buf}); if(!x.ok) throw 0; }catch{ toast('音声を送れませんでした。電波を確かめてください'); return; } }
+  advReplace(pg.i, null, {k:'au', id:uid('a'), aud:id, mime, dur:r.dur, x:rnd(pt.x), y:rnd(pt.y)});
+  toast('🔊 音声を送りました', 1600);
 }
 
 
