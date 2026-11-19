@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>トキノート</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="トキノート">
+<meta name="theme-color" content="#1f6feb">
 <style>
 :root{
   --bg:#eef1f5; --card:#fff; --ink:#1d2330; --sub:#5b6474; --line:#d9dee7;
@@ -160,6 +165,9 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 .keys button{width:84px;height:84px;border-radius:50%;background:#fff;font-size:30px;font-weight:600;box-shadow:0 1px 4px rgba(20,30,50,.15)}
 .keys button:active{background:var(--accent-soft)}
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
+#qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
+#qBar.hidden{display:none}
+body.hasQ #app,body.hasQ .screen{top:var(--qh,52px)}
 #viewFollow.on{background:var(--accent);color:#fff}
 #advTools{display:none;position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
   align-items:center;gap:2px;padding:6px 8px;background:#fff;border-radius:20px;box-shadow:0 4px 18px rgba(20,30,50,.18);max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:center;border:2px solid #0a9b5c}
@@ -209,6 +217,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 </style>
 </head>
 <body>
+<div id="qBar" class="hidden"></div>
 <div id="app" class="hidden">
   <header id="top">
     <button id="btnLib" class="ib" aria-label="本棚">📚</button>
@@ -219,6 +228,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnZoomOut" class="ib" aria-label="小さく">－</button>
     <button id="btnZoomIn" class="ib" aria-label="大きく">＋</button>
     <button id="btnPage" class="pill">1 / 1</button>
+    <button id="btnAsk" class="pill hidden" style="background:#fff3c4">🙋 しつもん</button>
     <button id="btnAdv" class="ib hidden" aria-label="アドバイスの表示">💬</button>
     <button id="btnMemo" class="ib" aria-label="計算メモ">📝</button>
     <button id="btnCoin" class="pill">🪙 <span id="coinNum">0</span></button>
@@ -262,6 +272,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnAdd" class="big">＋ 問題集のPDFを入れる</button>
     <button id="btnLibReview" class="big sub">🔁 間違えた問題の復習 <span id="libDue"></span></button>
     <button id="btnLibReward" class="big sub">🎁 ごほうび（🪙 <span id="libCoin">0</span>）</button>
+    <button id="btnLibPush" class="big sub hidden">🔔 しつもん通知をこの端末で受け取る</button>
     <button id="btnLibWatch" class="big sub hidden">👀 見守る（ほかの端末で書いている様子を見る）</button>
     <div id="todayBox" class="note"></div>
     <h2>本棚</h2>
@@ -1461,6 +1472,7 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="backup"><span>バックアップを保存<br><span class="s">書き込み・丸つけ・記録（PDF本体は含みません）</span></span><span>💾</span></button>
   <button class="opt" data-a="restore"><span>バックアップから戻す</span><span>📥</span></button>
   <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>
+  ${Cloud.mode==='cf'?'<button class="opt" data-a="push"><span>🔔 しつもん通知を受け取る（この端末）<br><span class="s">おうちの人のスマホで設定します</span></span><span>🔔</span></button><button class="opt" data-a="pushtest"><span>🔔 通知のテスト</span><span>📨</span></button>':''}
   ${Cloud.mode==='cf'?'<button class="opt" data-a="logout"><span>この端末でログアウト<br><span class="s">次に開くときはパスコードが必要です</span></span><span>🔒</span></button>':''}`,
   close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a))
 ).then(a=>menuAction(a));
@@ -1475,6 +1487,8 @@ async function menuAction(a){
   else if(a==='backup') exportBackup();
   else if(a==='restore') $('#fileJson').click();
   else if(a==='help') showHelp();
+  else if(a==='push') setupPush();
+  else if(a==='pushtest') testPush();
   else if(a==='logout'){ if(await confirmDlg('ログアウト','この端末でログアウトします。書き込みはクラウドに残ります。','ログアウト')){ await Cloud.flush(); await api('api/logout',{method:'POST'}).catch(()=>{}); location.reload(); } }
 }
 function clearStrokes(pages){
@@ -1563,6 +1577,7 @@ async function renderLib(){
     h+=`<div class="card ghost"><div style="font-size:30px">☁️</div><div class="grow"><div class="t">${esc(sh.name)}</div><div class="m">クラウドに書き込みがあります。同じPDFを入れると戻ります</div></div></div>`;
   }
   $('#btnLibWatch').classList.toggle('hidden', Cloud.mode!=='cf');
+  $('#btnLibPush').classList.toggle('hidden', Cloud.mode!=='cf' || !!state.settings.pushOn);
   $('#bookList').innerHTML = h || `<p class="note">まだ問題集がありません。「＋ 問題集のPDFを入れる」から追加してください。</p>`;
   $('#saveNote').innerHTML = Cloud.mode==='cf'
     ? '書き込み・丸つけ・記録・PDFは、この端末と<b>家族専用のクラウド（Cloudflare）</b>に自動保存されます。別の端末でも、パスコードを入れれば同じ続きから使えます。'
@@ -1648,7 +1663,7 @@ async function openBook(id){
   requestAnimationFrame(()=>scrollToPage(state.curPage));
   refreshDue(); renderStats();
   if(state.memoOpen) showMemoFor(state.curPage);
-  sendCur(); renderViewBar();
+  sendCur(); renderViewBar(); renderAskBtn();
   syncBookFromCloud(id);
 }
 
@@ -1994,7 +2009,7 @@ async function chooseViewLearner(){
 }
 async function enterView(L){
   state.viewOnly=true; state.viewFollow=true; state.myLearner=state.learner; state.learner=L; state.advTool='hand'; renderAdvTools();
-  document.body.classList.add('viewing'); setMemo(false);
+  document.body.classList.add('viewing'); setMemo(false); renderAskBtn();
   await loadAllForLearner(); await syncLearnerFromCloud();
   Live.send({t:'hello'});
   const c=state.liveCur?.[L];
@@ -2002,7 +2017,7 @@ async function enterView(L){
   renderViewBar();
 }
 async function exitView(){
-  state.viewOnly=false; document.body.classList.remove('viewing'); applyTouchMode();
+  state.viewOnly=false; document.body.classList.remove('viewing'); applyTouchMode(); setTimeout(renderAskBtn,0);
   state.learner=state.myLearner||state.learner; state.book=null;
   await loadAllForLearner(); showScreen('lib'); renderLib(); renderViewBar();
 }
@@ -2023,6 +2038,8 @@ const liveClearT=new Map();
 function armLiveClear(p){ clearTimeout(liveClearT.get(p)); liveClearT.set(p, setTimeout(()=>{ clearViewLive(p); if(state.memoOpen && memoPage===p) drawMemo(); }, 4000)); }
 function clearViewLive(p){ const pg=state.pages[p]; if(pg?.vlive){ pg.vlive.getContext('2d').clearRect(0,0,pg.vlive.width,pg.vlive.height); } }
 async function onLiveMsg(m){
+  if(m.t==='q'){ if(!sentQ.has(m.q?.id) && !(Cloud.mode==='cf' && !state.viewOnly && m.q?.L===state.learner && state.screen==='main')) showQBar(m.q); return; }
+  if(m.t==='qack'){ if(!state.viewOnly && m.L===state.learner){ toast('👀 おうちの人が見てくれています', 3500); if(state.settings.sound) tone(1319,0,.2,'sine',.1); } return; }
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
   if(m.L && m.L!==state.learner) return;
@@ -2063,6 +2080,7 @@ async function onLiveMsg(m){
 $('#viewFollow').onclick=()=>{ state.viewFollow=!state.viewFollow; renderViewBar(); const c=state.liveCur?.[state.learner]; if(state.viewFollow && c) followTo(c); };
 $('#viewExit').onclick=()=>exitView();
 $('#btnLibWatch').onclick=()=>chooseViewLearner();
+$('#btnLibPush').onclick=async()=>{ await setupPush(); renderLib(); };
 
 
 /* ================= アドバイス層（おうちの人 → 子ども）：手書き・文字・画像 ================= */
@@ -2228,12 +2246,12 @@ function audBubble(pg, t){
 }
 // 録音シート
 function pickMime(){ for(const m of ['audio/mp4','audio/webm;codecs=opus','audio/webm']) if(window.MediaRecorder?.isTypeSupported?.(m)) return m; return ''; }
-async function recordSheet(){
+async function recordSheet(title='🎤 音声でアドバイス'){
   if(!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder){ toast('この画面では録音できません'); return null; }
   let stream; try{ stream=await navigator.mediaDevices.getUserMedia({audio:true}); }catch{ toast('マイクが使えません。ブラウザの設定でマイクを許可してください', 5000); return null; }
   const mime=pickMime(); let rec, chunks=[], t0=0, timer=null, blob=null, dur=0;
   const stop=()=>{ try{ rec?.state==='recording' && rec.stop(); }catch{} clearInterval(timer); };
-  const res=await openSheet(`<h3>🎤 音声でアドバイス</h3>
+  const res=await openSheet(`<h3>${title}</h3>
     <p class="note" style="margin-bottom:10px">いちばん長くて2分です。録音したら、聞きなおしてから送れます。</p>
     <div style="text-align:center;margin:8px 0 16px"><button id="recBtn" class="recbtn">●</button><div id="recTime" style="font-size:22px;font-weight:800;margin-top:8px">0:00</div></div>
     <div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn" data-a="1" id="recSend" disabled style="opacity:.4">送る</button></div>
@@ -2744,6 +2762,93 @@ async function myTextAt(pg, pt, e){
 }
 
 
+/* ================= 🙋 しつもん（子ども → おうちの人のスマホに通知） ================= */
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+const sentQ = new Set();
+function renderAskBtn(){ const b=$('#btnAsk'); if(b) b.classList.toggle('hidden', Cloud.mode!=='cf' || state.viewOnly || !state.book); }
+async function askQuestion(){
+  if(Cloud.mode!=='cf' || !state.book) return;
+  const who=state.learners.find(l=>l.id===state.learner)?.name||'子ども', p=state.curPage;
+  const how=await openSheet(`<h3>🙋 おうちの人にしつもん</h3><p class="note" style="margin-bottom:12px">${esc(state.book.name)}　${p+1}ページ</p>
+    <div class="grid2" style="margin-bottom:10px"><button class="btn sub" data-a="voice" style="height:60px">🎤 声で</button><button class="btn sub" data-a="text" style="height:60px">✏️ 文字で</button></div>
+    <button class="big" data-a="now" style="margin:0">🙋 このまま送る</button>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+  if(!how) return;
+  const q={id:uid('q'), L:state.learner, who, b:state.book.id, book:state.book.name, p};
+  if(how==='text'){ const t=await promptDlg('なにがわからない？（みじかくてOK）'); if(t===null) return; q.text=t.trim().slice(0,120); }
+  if(how==='voice'){
+    const r=await recordSheet('🎤 声でしつもん'); if(!r) return;
+    const buf=await r.blob.arrayBuffer(); const id=await sha(buf); const mime=(r.blob.type||'audio/mp4').split(';')[0];
+    await store.put('files','aud|'+id, buf);
+    try{ const x=await api(`api/blob/${id}?name=${encodeURIComponent(mime)}`,{method:'PUT', headers:{'content-type':mime}, body:buf}); if(!x.ok) throw 0; }catch{ toast('送れませんでした。電波を確かめてください'); return; }
+    q.aud=id; q.mime=mime; q.dur=r.dur;
+  }
+  sentQ.add(q.id);
+  try{ const r=await api('api/q',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(q)}); if(!r.ok) throw 0;
+    toast('📨 おうちの人に送りました。まっていてね', 3000); if(state.settings.sound){ tone(784,0,.12); tone(1047,.12,.2); } }
+  catch{ toast('送れませんでした。電波を確かめてください'); }
+}
+$('#btnAsk').onclick=askQuestion;
+// おうちの人：しつもんのお知らせ
+let curQ=null;
+function showQBar(q){
+  if(!q || q.test) return; curQ=q;
+  const bar=$('#qBar'); bar.classList.remove('hidden'); document.body.classList.add('hasQ');
+  bar.innerHTML=`<span>🙋 <b>${esc(q.who||'子ども')}</b> からしつもん：${esc(q.book||'')} ${q.p!=null?(q.p+1)+'ページ':''}${q.text?` 「${esc(q.text)}」`:''}</span><div class="sp"></div>
+    ${q.aud?'<button class="pill" data-q="play">🔊 聞く</button>':''}<button class="pill" data-q="go" style="background:var(--accent);color:#fff">👀 見る</button><button class="ib" data-q="x">✕</button>`;
+  requestAnimationFrame(()=>document.body.style.setProperty('--qh', bar.offsetHeight+'px'));
+  if(state.settings.sound){ tone(880,0,.15,'sine',.12); tone(1175,.15,.2,'sine',.12); tone(1568,.32,.3,'sine',.12); }
+}
+$('#qBar').addEventListener('click', async e=>{
+  const a=e.target.closest('button')?.dataset.q; if(!a || !curQ) return;
+  if(a==='x'){ $('#qBar').classList.add('hidden'); document.body.classList.remove('hasQ'); return; }
+  if(a==='play'){ playAud({id:'q'+curQ.id, aud:curQ.aud, mime:curQ.mime}, e.target); return; }
+  if(a==='go'){ await openQuestion(curQ); }
+});
+async function openQuestion(q){
+  Live.send({t:'qack', L:q.L, id:q.id});
+  if(!state.viewOnly || state.learner!==q.L){ if(state.viewOnly) await exitView(); await enterView(q.L); }
+  await followTo({L:q.L, b:q.b, p:q.p});
+  showQBar(q);
+}
+// 通知を開いて来たとき
+async function handleQueryOpen(){
+  const u=new URL(location.href); const L=u.searchParams.get('watch'); if(!L || Cloud.mode!=='cf') return;
+  history.replaceState(null,'','/');
+  let q=null; try{ const r=await api('api/q/latest'); if(r.ok) q=await r.json(); }catch{}
+  if(q && q.L===L && !q.test) await openQuestion(q); else await enterView(L);
+}
+navigator.serviceWorker?.addEventListener('message', e=>{ if(e.data?.t==='openQ'){ history.replaceState(null,'',e.data.url); handleQueryOpen(); } });
+// 通知の登録（おうちの人の端末）
+async function setupPush(){
+  if(Cloud.mode!=='cf'){ toast('通知は、Cloudflare版で使えます'); return; }
+  if(isIOS() && !isStandalone()){
+    await openSheet(`<h3>🔔 先にホーム画面に追加してください</h3>
+      <p>iPhone・iPadで通知を受け取るには、トキノートを<b>ホーム画面のアプリ</b>として開く必要があります。</p>
+      <p>1. Safariの下（iPadは上）の <b>共有ボタン（□に↑）</b> をタップ<br>2. <b>「ホーム画面に追加」</b> → 「追加」<br>3. ホーム画面の <b>トキノート</b> から開き、パスコードを入れる<br>4. もう一度 ⋯ →「🔔 しつもん通知を受け取る」</p>
+      <button class="btn" style="width:100%" data-a="1">わかった</button>`, close=>$('#sheet [data-a]').onclick=()=>close());
+    return;
+  }
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)){ toast('この端末・ブラウザは通知に対応していません', 4000); return; }
+  try{
+    const perm=await Notification.requestPermission(); if(perm!=='granted'){ toast('通知が許可されませんでした。設定アプリの「通知」から許可できます', 5000); return; }
+    const reg=await navigator.serviceWorker.ready;
+    const {key}=await (await api('api/push/key')).json();
+    const raw=Uint8Array.from(atob(key.replace(/-/g,'+').replace(/_/g,'/')+'=='.slice(0,(4-key.length%4)%4)), c=>c.charCodeAt(0));
+    let sub=await reg.pushManager.getSubscription(); if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:raw});
+    const label=(navigator.userAgent.match(/iPhone|iPad|Android|Mac|Windows/)||['端末'])[0];
+    const r=await api('api/push/sub',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({sub:sub.toJSON(), label})});
+    if(!r.ok) throw 0;
+    state.settings.pushOn=true; saveMeta();
+    toast('🔔 この端末で、しつもん通知を受け取れるようになりました', 3500);
+  }catch(err){ console.warn(err); toast('通知の登録に失敗しました。もう一度ためしてください', 4000); }
+}
+async function testPush(){
+  try{ const r=await api('api/push/test',{method:'POST'}); const j=await r.json(); toast(j.devices ? `🔔 ${j.devices}台にテスト通知を送りました` : '通知を受け取る端末がまだありません', 3500); }catch{ toast('送れませんでした'); }
+}
+
+
 /* ================= boot ================= */
 guardStylus($('#pages'));
 async function boot(){
@@ -2757,6 +2862,7 @@ async function boot(){
   await Cloud.init();            // Cloudflare版なら、ここでパスコード画面が出る
   await renderLib();
   if(Cloud.db){ await syncCfgFromCloud(); await syncLearnerFromCloud(); renderLib(); pushAllBooksToCloud(); }
+  if(Cloud.mode==='cf'){ try{ await navigator.serviceWorker?.register('/sw.js'); }catch{} await handleQueryOpen(); }
 }
 boot();
 </script>

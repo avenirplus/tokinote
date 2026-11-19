@@ -40,6 +40,39 @@ export class Family extends DurableObject {
     this.sql.exec(`CREATE TABLE IF NOT EXISTS blob (id TEXT NOT NULL, idx INTEGER NOT NULL, data BLOB NOT NULL, PRIMARY KEY (id, idx))`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS bloblen (id TEXT PRIMARY KEY, size INTEGER NOT NULL, name TEXT, updated INTEGER NOT NULL)`);
     this.sql.exec(`CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)`);
+    this.sql.exec(`CREATE TABLE IF NOT EXISTS push (id TEXT PRIMARY KEY, sub TEXT NOT NULL, label TEXT, created INTEGER NOT NULL)`);
+  }
+
+  /* ---------- 通知（Web Push / VAPID）：中身なしの通知を送り、端末側が /api/q/latest を見にくる ---------- */
+  async vapid() {
+    let raw = this.meta('vapid');
+    if (!raw) {
+      const kp = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+      const jwk = await crypto.subtle.exportKey('jwk', kp.privateKey);
+      const pub = b64url(await crypto.subtle.exportKey('raw', kp.publicKey));
+      raw = JSON.stringify({ jwk, pub }); this.setMeta('vapid', raw);
+    }
+    const v = JSON.parse(raw);
+    v.key = await crypto.subtle.importKey('jwk', v.jwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+    return v;
+  }
+  async pushOne(sub, v, origin) {
+    const ep = new URL(sub.endpoint);
+    const enc = (o) => b64url(new TextEncoder().encode(JSON.stringify(o)));
+    const unsigned = `${enc({ typ: 'JWT', alg: 'ES256' })}.${enc({ aud: ep.origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: origin })}`;
+    const sig = b64url(await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, v.key, new TextEncoder().encode(unsigned)));
+    return fetch(sub.endpoint, { method: 'POST', headers: { TTL: '86400', Urgency: 'high', Authorization: `vapid t=${unsigned}.${sig}, k=${v.pub}` } });
+  }
+  async pushAll(origin) {
+    const v = await this.vapid(); const rows = this.sql.exec(`SELECT id, sub FROM push`).toArray(); let ok = 0;
+    for (const r of rows) {
+      try {
+        const res = await this.pushOne(JSON.parse(r.sub), v, origin);
+        if (res.status === 404 || res.status === 410) this.sql.exec(`DELETE FROM push WHERE id=?`, r.id);   // もう使われていない端末
+        else if (res.ok) ok++;
+      } catch {}
+    }
+    return { sent: ok, devices: rows.length };
   }
 
   /* ---------- 小さな道具 ---------- */
@@ -100,6 +133,38 @@ export class Family extends DurableObject {
 
     // すべての端末をログアウトさせる（パスコードを変えたとき用）
     if (path === '/api/logout-all' && request.method === 'POST') { this.setMeta('sessionGen', String(Date.now())); return json({ ok: true }); }
+
+    // 🙋 しつもん
+    if (path === '/api/q' && request.method === 'POST') {
+      let q; try { q = await request.json(); } catch { return json({ ok: false }, 400); }
+      if (!q || !/^[\w-]{4,40}$/.test(q.id || '')) return json({ ok: false, error: 'bad' }, 400);
+      q.at = Date.now();
+      const text = JSON.stringify(q).slice(0, 20000);
+      this.sql.exec(`INSERT INTO kv(key,val,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated=excluded.updated`, 'q_' + q.id, text, q.at);
+      this.setMeta('qlatest', text);
+      for (const ws of this.ctx.getWebSockets()) { try { ws.send(JSON.stringify({ t: 'q', q })); } catch {} }
+      this.ctx.waitUntil(this.pushAll(url.origin));
+      return json({ ok: true });
+    }
+    if (path === '/api/q/latest') { const v = this.meta('qlatest'); return v ? new Response(v, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }) : json({}, 404); }
+    if (path === '/api/push/key') { const v = await this.vapid(); return json({ key: v.pub }); }
+    if (path === '/api/push/sub' && request.method === 'POST') {
+      let b; try { b = await request.json(); } catch { return json({ ok: false }, 400); }
+      if (!b?.sub?.endpoint || !/^https:\/\//.test(b.sub.endpoint)) return json({ ok: false }, 400);
+      const id = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(b.sub.endpoint))).slice(0, 32);
+      this.sql.exec(`INSERT INTO push(id,sub,label,created) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET sub=excluded.sub, label=excluded.label`, id, JSON.stringify(b.sub), (b.label || '').slice(0, 40), Date.now());
+      return json({ ok: true, id });
+    }
+    if (path === '/api/push/sub' && request.method === 'DELETE') {
+      const ep = url.searchParams.get('endpoint') || '';
+      const id = b64url(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ep))).slice(0, 32);
+      this.sql.exec(`DELETE FROM push WHERE id=?`, id); return json({ ok: true });
+    }
+    if (path === '/api/push/test' && request.method === 'POST') {
+      this.setMeta('qlatest', JSON.stringify({ id: 'test', test: true, at: Date.now() }));
+      return json({ ok: true, ...(await this.pushAll(url.origin)) });
+    }
+    if (path === '/api/push/count') return json({ devices: this.sql.exec(`SELECT count(*) AS n FROM push`).toArray()[0].n });
 
     if (path === '/api/kv') {
       const key = url.searchParams.get('key') || '';
