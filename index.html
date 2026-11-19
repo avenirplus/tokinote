@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>トキノート</title>
+<style>
+:root{
+  --bg:#eef1f5; --card:#fff; --ink:#1d2330; --sub:#5b6474; --line:#d9dee7;
+  --accent:#1f6feb; --accent-soft:#e7f0ff; --ok:#e5002d; --tri:#f08c00; --ng:#2f6fe0;
+  --r:14px;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",sans-serif;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;overflow:hidden}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer;touch-action:manipulation}
+.hidden{display:none!important}
+
+/* ===== main ===== */
+#app{position:fixed;inset:0;display:flex;flex-direction:column}
+#top{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 10px;background:var(--card);border-bottom:1px solid var(--line);z-index:5}
+.ib{min-width:42px;height:42px;border-radius:12px;font-size:20px;display:inline-flex;align-items:center;justify-content:center}
+.ib:active,.pill:active{background:#e9edf3}
+.ib.on{background:var(--accent-soft);outline:2px solid var(--accent)}
+.pill{height:42px;padding:0 12px;border-radius:21px;background:#f1f3f7;font-size:15px;font-weight:600;white-space:nowrap}
+.pill b{color:var(--ok)}
+#bookTitle{font-weight:700;font-size:15px;max-width:22vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#stats{font-size:13px;color:var(--sub);white-space:nowrap}
+.sp{flex:1}
+#cloud{font-size:12px;color:var(--sub);white-space:nowrap}
+@media (max-width:900px){ #btnZoomOut,#btnZoomIn{display:none} }
+#viewer{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;position:relative}
+#pages{display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 12px 140px;min-width:100%;width:max-content;box-sizing:border-box}
+.page{position:relative;background:#fff;box-shadow:0 1px 4px rgba(20,30,50,.18);flex:none;touch-action:pan-x pan-y}
+body.fd .page{touch-action:none}
+.page canvas{position:absolute;left:0;top:0;display:block}
+#mainArea{flex:1;display:flex;min-height:0;position:relative}
+#memo{position:absolute;z-index:5;display:flex;flex-direction:column;background:#fcfdff;border:2px solid #b9c4d4;border-radius:14px;
+  box-shadow:0 8px 28px rgba(20,30,50,.25);overflow:hidden}
+.mhead{display:flex;align-items:center;gap:4px;padding:4px 6px 4px 10px;background:#eef3fa;border-bottom:1px solid var(--line);font-size:14px;touch-action:none;cursor:move;flex:none}
+.mhead .grip{color:#9aa5b5;font-size:16px;letter-spacing:-2px;margin-right:4px}
+#memoResize{position:absolute;right:0;bottom:0;width:40px;height:40px;touch-action:none;cursor:nwse-resize;z-index:2;
+  display:flex;align-items:flex-end;justify-content:flex-end;padding:3px 5px;color:#5b6f8f;font-size:16px;
+  background:linear-gradient(135deg,transparent 52%,rgba(31,111,235,.18) 52%);border-bottom-right-radius:12px}
+#memoBody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+#memoStage{position:relative;touch-action:pan-x pan-y;
+  background-image:linear-gradient(#e6ebf3 1px,transparent 1px),linear-gradient(90deg,#e6ebf3 1px,transparent 1px);background-size:28px 28px}
+body.fd #memoStage{touch-action:none}
+#memoStage canvas{position:absolute;left:0;top:0;display:block}
+#btnMemo.on{background:var(--accent-soft);outline:2px solid var(--accent)}
+.page canvas.live{pointer-events:none}
+.ov{position:absolute;inset:0;pointer-events:none}
+.ov>*{position:absolute;left:calc(var(--x) * var(--u) * 1px);top:calc(var(--y) * var(--u) * 1px);
+  width:calc(var(--w) * var(--u) * 1px);height:calc(var(--h) * var(--u) * 1px)}
+.pno{position:absolute;right:-2px;bottom:-22px;font-size:12px;color:var(--sub)}
+.mask{background:#8f99a8;border-radius:6px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;
+  font-size:clamp(12px,calc(var(--h) * var(--u) * .5px),28px);transition:background .15s}
+.mask::after{content:"？"}
+.mask.open{background:transparent;outline:2px dashed rgba(143,153,168,.8)}
+.mask.open::after{content:""}
+.region{border:2px dashed rgba(31,111,235,.45);border-radius:8px}
+.badge{position:absolute;left:-2px;top:-14px;background:#fff;border:1.5px solid rgba(31,111,235,.6);color:var(--accent);
+  font-size:12px;font-weight:700;padding:1px 7px;border-radius:10px;white-space:nowrap}
+.badge.ng{border-color:var(--ng);color:var(--ng)} .badge.ok{border-color:var(--ok);color:var(--ok)} .badge.grad{border-color:#b8860b;color:#b8860b}
+.del{position:absolute;right:-12px;top:-12px;width:28px;height:28px;border-radius:50%;background:#e5002d;color:#fff;font-weight:800;
+  font-size:16px;line-height:28px;text-align:center;pointer-events:auto;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.rubber{border:2px dashed var(--accent);background:rgba(31,111,235,.08);border-radius:6px}
+.rubber.mask{border-color:#6b7380;background:rgba(107,115,128,.25)}
+.loading{padding:60px 20px;color:var(--sub);font-size:16px}
+
+/* tools */
+#tools{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
+  display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;background:var(--card);border-radius:20px;
+  box-shadow:0 4px 18px rgba(20,30,50,.18);max-width:calc(100vw - 16px)}
+#toolBtns{display:flex;gap:2px;flex-wrap:nowrap}
+#toolsMini{display:none}
+#tools.min{left:auto;right:calc(12px + env(safe-area-inset-right));transform:none;padding:5px;border-radius:18px}
+#tools.min #toolBtns,#tools.min #row2{display:none}
+#tools.min #toolsMini{display:flex;outline:2px solid var(--accent);background:var(--accent-soft)}
+#row2{display:flex;align-items:center;gap:2px}
+@media (min-width:1100px){ #tools{flex-direction:row} #row2{margin-left:6px;border-left:1px solid var(--line);padding-left:6px} }
+.tool{width:clamp(36px,calc((100vw - 52px)/9),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.tool small{font-size:10px;white-space:nowrap;color:var(--sub);margin-top:3px}
+.tool.on{background:var(--accent-soft);outline:2px solid var(--accent)}
+.sep{width:1px;height:38px;background:var(--line);margin:0 4px}
+#opts{display:flex;align-items:center;gap:6px;min-height:46px;padding:0 4px}
+.sw{width:32px;height:32px;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 1.5px var(--line)}
+.sw.on{box-shadow:0 0 0 3px var(--accent)}
+.sw.pal{background:#fff;font-size:17px;display:flex;align-items:center;justify-content:center;border:0;box-shadow:0 0 0 1.5px var(--line)}
+.wd{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.wd i{display:block;background:var(--ink);border-radius:9px;width:22px}
+.wd.on{background:var(--accent-soft);outline:2px solid var(--accent)}
+.hint{font-size:13px;color:var(--sub);max-width:200px;line-height:1.35}
+.ib:disabled{opacity:.3}
+
+/* red sheet */
+#redsheet{position:fixed;left:0;right:0;height:38vh;background:#ff0000;mix-blend-mode:multiply;pointer-events:none;z-index:4}
+#redgrip{position:fixed;left:50%;transform:translate(-50%,-100%);z-index:7;background:#c4001c;color:#fff;font-weight:700;font-size:14px;
+  padding:8px 18px;border-radius:14px 14px 0 0;touch-action:none;cursor:grab}
+
+/* screens */
+.screen{position:fixed;inset:0;background:var(--bg);z-index:20;overflow:auto;-webkit-overflow-scrolling:touch}
+.wrap{max-width:860px;margin:0 auto;padding:20px 16px calc(40px + env(safe-area-inset-bottom))}
+h1{font-size:24px;margin:6px 0 14px}
+h2{font-size:18px;margin:22px 0 10px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.chip{height:40px;padding:0 16px;border-radius:20px;background:#fff;border:1.5px solid var(--line);font-weight:700}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.big{display:block;width:100%;height:58px;border-radius:16px;background:var(--accent);color:#fff;font-size:18px;font-weight:800;margin:14px 0}
+.big.sub{background:#fff;color:var(--accent);border:2px solid var(--accent)}
+.card{background:#fff;border-radius:var(--r);padding:14px 16px;margin:10px 0;box-shadow:0 1px 3px rgba(20,30,50,.08);display:flex;gap:12px;align-items:center}
+.card .t{font-weight:700;font-size:16px;word-break:break-all}
+.card .m{font-size:13px;color:var(--sub);margin-top:3px}
+.card .grow{flex:1;min-width:0}
+.card.ghost{opacity:.6}
+.btn{height:42px;padding:0 16px;border-radius:12px;background:var(--accent);color:#fff;font-weight:700;white-space:nowrap}
+.btn.sub{background:#f1f3f7;color:var(--ink)}
+.btn.red{background:#fdecee;color:#c4001c}
+.note{font-size:13px;color:var(--sub);line-height:1.6}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:9px;background:#fdecee;color:#c4001c;margin-left:6px}
+.tag.blue{background:var(--accent-soft);color:var(--accent)}
+
+/* review */
+#review{display:flex;flex-direction:column;overflow:hidden}
+#rvHead{display:flex;align-items:center;gap:6px;padding:8px 10px;background:#fff;border-bottom:1px solid var(--line);flex-wrap:wrap}
+#rvBody{flex:1;overflow:auto;-webkit-overflow-scrolling:touch}
+#rvStage{position:relative;margin:14px auto 160px;background:#fff;box-shadow:0 1px 4px rgba(20,30,50,.18);touch-action:pan-x pan-y}
+body.fd #rvStage{touch-action:none}
+#rvStage canvas{position:absolute;left:0;top:0;display:block}
+#rvStage .calc{position:absolute;left:0;right:0;border-top:2px dashed var(--line);color:#b0b7c3;font-size:13px;padding:6px 10px;pointer-events:none}
+#rvGrade{position:absolute;left:50%;bottom:calc(14px + env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:10px;
+  background:#fff;padding:10px;border-radius:22px;box-shadow:0 4px 18px rgba(20,30,50,.2);z-index:3}
+.gb{width:84px;height:68px;border-radius:16px;font-size:30px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#f6f7fa}
+.gb small{font-size:11px;color:var(--sub);margin-top:2px}
+.rvinfo{max-width:900px;margin:12px auto 0;padding:0 16px;font-size:14px;color:var(--sub)}
+
+/* sheet / dialog */
+#veil{position:fixed;inset:0;background:rgba(15,20,30,.35);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+#sheet{background:#fff;width:min(560px,100%);border-radius:22px 22px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom));max-height:86vh;overflow:auto}
+#sheet h3{margin:0 0 12px;font-size:18px}
+#sheet p{margin:0 0 14px;line-height:1.6;font-size:15px}
+.opt{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:52px;padding:10px 12px;border-radius:12px;text-align:left;font-size:16px}
+.opt:active{background:#f1f3f7}
+.opt + .opt{border-top:1px solid #eef0f4}
+.opt .s{font-size:13px;color:var(--sub)}
+.sw2{width:50px;height:30px;border-radius:15px;background:#cfd5de;position:relative;flex:none}
+.sw2::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.sw2.on{background:#34c759} .sw2.on::after{left:23px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2 .btn{height:56px;font-size:16px}
+input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;font-size:18px;margin-bottom:14px;-webkit-user-select:text;user-select:text}
+#toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(25,30,40,.92);color:#fff;
+  padding:12px 18px;border-radius:14px;font-size:15px;z-index:60;max-width:90vw;text-align:center;line-height:1.5;pointer-events:none;transition:opacity .2s;opacity:0}
+#toast.show{opacity:1}
+.cf{position:fixed;width:10px;height:14px;border-radius:2px;z-index:55;pointer-events:none}
+.bigstamp{position:fixed;z-index:56;pointer-events:none;font-size:90px;font-weight:900}
+</style>
+</head>
+<body>
+<div id="app" class="hidden">
+  <header id="top">
+    <button id="btnLib" class="ib" aria-label="本棚">📚</button>
+    <div id="bookTitle"></div>
+    <div id="stats"></div>
+    <div class="sp"></div>
+    <span id="cloud"></span>
+    <button id="btnZoomOut" class="ib" aria-label="小さく">－</button>
+    <button id="btnZoomIn" class="ib" aria-label="大きく">＋</button>
+    <button id="btnPage" class="pill">1 / 1</button>
+    <button id="btnMemo" class="ib" aria-label="計算メモ">📝</button>
+    <button id="btnCoin" class="pill">🪙 <span id="coinNum">0</span></button>
+    <button id="btnRed" class="ib" aria-label="赤シート">🟥</button>
+    <button id="btnMaskAll" class="ib" aria-label="穴うめ全部">🙈</button>
+    <button id="btnReview" class="pill">🔁 復習 <b id="dueCount">0</b></button>
+    <button id="btnMore" class="ib" aria-label="メニュー">⋯</button>
+  </header>
+  <div id="mainArea">
+    <main id="viewer"><div id="pages"></div></main>
+    <div id="memo" class="hidden">
+      <div class="mhead"><span class="grip">⋮⋮</span><b id="memoTitle">📝 メモ</b><div class="sp"></div>
+        <button id="memoClear" class="pill" style="height:36px">全部消す</button>
+        <button id="memoClose" class="ib" aria-label="メモを閉じる">✕</button></div>
+      <div id="memoBody"><div id="memoStage"><canvas></canvas></div></div>
+      <div id="memoResize" aria-label="大きさを変える">⇲</div>
+    </div>
+  </div>
+  <div id="redsheet" class="hidden"></div>
+  <div id="redgrip" class="hidden">⇕ 赤シート</div>
+  <nav id="tools">
+    <div id="toolBtns"></div>
+    <div id="row2">
+      <div id="opts"></div>
+      <div class="sep"></div>
+      <button id="btnUndo" class="ib" aria-label="元に戻す">↶</button>
+      <button id="btnRedo" class="ib" aria-label="やり直す">↷</button>
+      <button id="btnToolsHide" class="ib" aria-label="ツールをかくす" style="font-size:16px">▾</button>
+    </div>
+    <button id="toolsMini" class="tool" aria-label="ツールを出す"></button>
+  </nav>
+</div>
+
+<section id="lib" class="screen">
+  <div class="wrap">
+    <h1>📚 トキノート</h1>
+    <div class="row" id="learners"></div>
+    <button id="btnAdd" class="big">＋ 問題集のPDFを入れる</button>
+    <button id="btnLibReview" class="big sub">🔁 間違えた問題の復習 <span id="libDue"></span></button>
+    <button id="btnLibReward" class="big sub">🎁 ごほうび（🪙 <span id="libCoin">0</span>）</button>
+    <div id="todayBox" class="note"></div>
+    <h2>本棚</h2>
+    <div id="bookList"></div>
+    <h2>保存について</h2>
+    <p class="note" id="saveNote"></p>
+  </div>
+</section>
+
+<section id="review" class="screen hidden">
+  <div id="rvHead">
+    <button id="rvBack" class="pill">← もどる</button>
+    <div id="rvTitle" style="font-weight:700"></div>
+    <div class="sp"></div>
+    <span id="rvTools">
+      <button id="rvPen" class="ib on" aria-label="ペン">✏️</button>
+      <button id="rvEraser" class="ib" aria-label="消す">🧽</button>
+      <button id="rvUndo" class="ib" aria-label="元に戻す">↶</button>
+      <button id="rvClear" class="pill">全部消す</button>
+    </span>
+  </div>
+  <div id="rvBody"></div>
+  <div id="rvGrade" class="hidden">
+    <button class="gb" data-m="o">⭕<small>できた</small></button>
+    <button class="gb" data-m="t">🔺<small>おしい</small></button>
+    <button class="gb" data-m="x">❌<small>まだ</small></button>
+    <button class="gb" data-m="skip" style="font-size:20px">⏭<small>あとで</small></button>
+  </div>
+</section>
+
+<section id="rewardScr" class="screen hidden"><div class="wrap" id="rwBody"></div></section>
+
+<div id="veil" class="hidden"><div id="sheet"></div></div>
+<div id="toast"></div>
+<input type="file" id="filePdf" accept="application/pdf,.pdf" multiple hidden>
+<input type="file" id="fileJson" accept="application/json,.json" hidden>
+
+<script type="module">
+import * as pdfjsLib from './vendor/pdf.min.mjs';
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('./vendor/pdf.worker.min.mjs', location.href).href;
+// cMap（日本語PDFの文字対応表）は cmaps.json に同梱し、必要な時だけ読む
+let cmapsP=null;
+const b64u8 = s => Uint8Array.from(atob(s), c=>c.charCodeAt(0));
+class BundledCMapFactory{
+  constructor(){}
+  async fetch({name}){
+    cmapsP ||= fetch(new URL('./cmaps.json', location.href)).then(r=>r.json()).catch(e=>{ cmapsP=null; throw e; });
+    const all=await cmapsP; if(!all[name]) throw new Error('CMap not found: '+name);
+    return {cMapData:b64u8(all[name]), isCompressed:true};
+  }
+}
+const PDF_OPTS = {cMapUrl:'bundled/', cMapPacked:true, CMapReaderFactory:BundledCMapFactory, useWorkerFetch:false, isEvalSupported:false, useSystemFonts:true};
+
+/* ================= constants ================= */
+const $ = s => document.querySelector(s);
+const DAY = 86400000;
+const INTERVALS = [3, 7, 30];          // ○のあと、次に出す日数。全部○で卒業
+const PEN_W = [18, 30, 52];            // 太さ（ページ幅=10000）
+const MK_W = [150, 230, 330];
+const ERASE_R = 140;
+const STAMP_S = 650;
+const PEN_COLORS = [['#1d2330','くろ'],['#6b7280','はいいろ'],['#1e3a8a','こん'],['#1f5fd6','あお'],['#0ea5e9','みずいろ'],['#0f9488','あおみどり'],
+  ['#12a150','みどり'],['#65a30d','きみどり'],['#ff5a00','赤シート用'],['#e11d48','あか'],['#db2777','ピンク'],['#c026d3','むらさきピンク'],
+  ['#7c3aed','むらさき'],['#92400e','ちゃいろ'],['#b8860b','きんいろ'],['#ffffff','しろ（けす代わり）']];
+const MK_COLORS = [['#ffe14d','きいろ'],['#ffb35c','オレンジ'],['#ff7a7a','あか'],['#ff8fc2','ピンク'],['#e9a3ff','むらさき'],
+  ['#a5b4ff','あお'],['#7fd8ff','みずいろ'],['#7ee8c8','ミント'],['#b8f25c','きみどり'],['#c7ccd4','はいいろ']];
+const RED_SHEET_HEX='#ff5a00';
+const colorName = (list, hex) => (list.find(x=>x[0].toLowerCase()===hex.toLowerCase())||[])[1] || 'じぶんの色';
+const STAMP_C = {o:'#e5002d', t:'#f08c00', x:'#2f6fe0'};
+const STAMP_ICON = {o:'⭕', t:'🔺', x:'❌'};
+const REASONS = ['計算ミス','読みまちがい','知らなかった','時間切れ'];
+const TOOLS = [['hand','✋','見る'],['pen','✏️','ペン'],['marker','🖍️','マーカー'],['eraser','🧽','消す'],
+  ['o','⭕','まる'],['t','🔺','おしい'],['x','❌','ばつ'],['region','🔲','問題わく'],['mask','⬛','穴うめ']];
+const STORES = ['files','books','shared','learn','ink','meta'];
+
+const state = {
+  learners:[{id:'k1',name:'子ども1'},{id:'k2',name:'子ども2'}], learner:'k1',
+  settings:{fingerDraw:true, penSeen:false, sound:true, pin:'', toolsHidden:false, memoBox:null,
+    pen:'#1d2330', mk:'#ffe14d', penRecent:['#1d2330','#1f5fd6','#ff5a00','#e11d48'], mkRecent:['#ffe14d','#ff8fc2','#7fd8ff','#b8f25c']},
+  tool:'pen', penW:1, mkW:1,
+  book:null, pdf:null, pdfId:null, shared:null, ink:new Map(), pages:[], zoom:1,
+  revealed:new Set(), revealAll:false, red:false, redTop:0,
+  learnAll:new Map(), sharedAll:new Map(), stats:{days:{},updated:0},
+  screen:'lib', lastAct:Date.now(), curPage:0
+};
+
+/* ================= utils ================= */
+const uid = (p='') => p + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+const clone = o => JSON.parse(JSON.stringify(o));
+const rnd = v => Math.round(v);
+const dateKey = (t=Date.now()) => { const d=new Date(t); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const endOfDay = (t=Date.now()) => { const d=new Date(t); d.setHours(23,59,59,999); return d.getTime(); };
+const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const withTimeout = (p, ms) => Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}), ms))]);
+const timers = new Map();
+function debounce(key, fn, ms){ clearTimeout(timers.get(key)); timers.set(key, setTimeout(()=>{ timers.delete(key); fn(); }, ms)); }
+let toastT;
+function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), ms); }
+
+/* ================= local storage (IndexedDB) ================= */
+let mem = null, dbp = null;
+const req = r => new Promise((res,rej)=>{ r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); });
+const done = t => new Promise((res,rej)=>{ t.oncomplete=()=>res(); t.onerror=()=>rej(t.error); t.onabort=()=>rej(t.error); });
+function openDB(){
+  if(!dbp) dbp = new Promise((res,rej)=>{
+    let r; try{ r = indexedDB.open('tokinote', 1); }catch(e){ rej(e); return; }
+    r.onupgradeneeded = () => { const d=r.result; for(const s of STORES) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s); };
+    r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); r.onblocked = () => rej(new Error('blocked'));
+  });
+  return dbp;
+}
+const store = {
+  async get(s,k){ if(mem) return mem[s].get(k); const d=await openDB(); return req(d.transaction(s).objectStore(s).get(k)); },
+  async put(s,k,v){ if(mem){ mem[s].set(k,v); return; } const d=await openDB(); const t=d.transaction(s,'readwrite'); t.objectStore(s).put(v,k); await done(t); },
+  async del(s,k){ if(mem){ mem[s].delete(k); return; } const d=await openDB(); const t=d.transaction(s,'readwrite'); t.objectStore(s).delete(k); await done(t); },
+  async range(s,prefix){
+    if(mem) return [...mem[s]].filter(([k])=>String(k).startsWith(prefix));
+    const d=await openDB(); const os=d.transaction(s).objectStore(s);
+    const kr = IDBKeyRange.bound(prefix, prefix+'￿');
+    const [ks,vs] = await Promise.all([req(os.getAllKeys(kr)), req(os.getAll(kr))]);
+    return ks.map((k,i)=>[k,vs[i]]);
+  },
+  all(s){ return this.range(s,''); }
+};
+async function initStore(){
+  try{ await withTimeout(openDB(), 5000); }
+  catch(e){ mem={}; for(const s of STORES) mem[s]=new Map(); toast('この画面では端末に保存できません。閉じると書き込みが消えます', 7000); }
+  try{ await navigator.storage?.persist?.(); }catch{}
+}
+
+/* ================= cloud (Claude artifact db) ================= */
+const Cloud = {
+  db:null, base:'', st:'connecting', q:new Map(), busy:new Set(), timer:null, warned:{},
+  async init(){
+    try{
+      if(!window.claude || typeof window.claude.use !== 'function'){ this.set('off'); return; }
+      const [db,user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
+      if(!db || !user){ this.set('off'); return; }
+      const id = await user.id(); if(!id){ this.set('off'); return; }
+      this.db = db; this.base = 'data/users/' + id; this.set('on');
+    }catch(e){ this.set('off'); }
+  },
+  set(s){ this.st=s; renderCloud(); },
+  doc(path){ return this.db.doc(this.base + '/' + path); },
+  put(path, body){ if(!this.db) return; this.q.set(path, body); clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), 2000); },
+  async flush(){
+    if(!this.db) return;
+    for(const [path,body] of [...this.q]){
+      if(this.busy.has(path)) continue;
+      this.q.delete(path); this.busy.add(path); this.set('saving');
+      try{ await this.doc(path).set(body); }
+      catch(e){
+        const c = e?.code;
+        if(c==='invalid_argument'){ if(!this.warned.big){ this.warned.big=1; toast('書き込みがとても多いページはクラウドに保存できませんでした（この端末には保存済み）', 6000);} }
+        else if(c==='quota_exceeded'){ if(!this.warned.q){ this.warned.q=1; toast('クラウドの保存容量がいっぱいです（この端末には保存済み）', 6000);} }
+        else if(['revoked','not_granted','capability_disabled','capability_removed'].includes(c)){ this.db=null; this.set('off'); return; }
+        else if(!this.q.has(path)) this.q.set(path, body);
+      }finally{ this.busy.delete(path); }
+    }
+    if(this.q.size){ clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), 4000); } else this.set('on');
+  },
+  async get(path){ if(!this.db) return null; try{ const s=await withTimeout(this.doc(path).get(), 10000); return s.exists ? clone(s.data()) : null; }catch{ return null; } },
+  async list(colPath, where){
+    if(!this.db) return [];
+    try{ let q = this.db.collection(this.base + (colPath ? '/'+colPath : '')); if(where) q = q.where(...where);
+      const s = await withTimeout(q.get(), 10000); return s.docs.map(d=>({id:d.id, data:clone(d.data())})); }
+    catch{ return []; }
+  }
+};
+function renderCloud(){
+  const el=$('#cloud'); if(!el) return;
+  el.textContent = Cloud.st==='on' ? '☁️✓' : Cloud.st==='saving' ? '☁️…' : Cloud.st==='connecting' ? '☁️' : '📱';
+  el.title = Cloud.st==='on' ? 'クラウドに保存済み' : Cloud.st==='saving' ? '保存中' : Cloud.st==='connecting' ? '接続中' : 'この端末にだけ保存';
+}
+
+/* ================= data: records ================= */
+const learnKey = (b, L=state.learner) => `${L}|${b}`;
+const inkKey = (b, p, L=state.learner) => `${L}|${b}|${p}`;
+const emptyShared = (name='', pages=0) => ({name, pages, problems:[], masks:[], rot:{}, updated:0});
+const emptyLearn = () => ({marks:{}, lastPage:0, updated:0});
+
+async function loadAllForLearner(){
+  state.learnAll = new Map((await store.range('learn', state.learner+'|')).map(([k,v])=>[k.split('|')[1], v]));
+  state.sharedAll = new Map(await store.all('shared'));
+  state.stats = (await store.get('meta', 'stats|'+state.learner)) || {days:{}, updated:0};
+  state.rewards = (await store.get('meta', 'rewards|'+state.learner)) || {list:clone(DEFAULT_REWARDS), spent:[], updated:0};
+  lastCoins=null; lastEarned=null; updateCoins();
+}
+function getLearn(b){ let l=state.learnAll.get(b); if(!l){ l=emptyLearn(); state.learnAll.set(b,l); } return l; }
+function getShared(b){ let s=state.sharedAll.get(b); if(!s){ s=emptyShared(); state.sharedAll.set(b,s); } return s; }
+
+function saveLearn(b){
+  const l=getLearn(b); l.updated=Date.now(); const L=state.learner;
+  debounce('learn'+L+b, ()=>{
+    store.put('learn', learnKey(b,L), l).catch(()=>{});
+    Cloud.put(`ln_${L}_${b}`, {...l, kind:'learn', book:b, learner:L});
+  }, 400);
+  refreshDue();
+}
+function saveShared(b){
+  const s=getShared(b); s.updated=Date.now();
+  debounce('shared'+b, ()=>{
+    store.put('shared', b, s).catch(()=>{});
+    Cloud.put(`sh_${b}`, {...s, kind:'shared', book:b});
+  }, 400);
+}
+function getInk(p){ let r=state.ink.get(p); if(!r){ r={items:[], updated:0}; state.ink.set(p,r); } return r; }
+function saveInk(p){
+  const r=getInk(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
+  debounce('ink'+L+b+p, ()=>{
+    store.put('ink', inkKey(b,p,L), r).catch(()=>{});
+    Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
+  }, 600);
+}
+function saveStats(){
+  state.stats.updated=Date.now(); const L=state.learner, st=state.stats;
+  debounce('stats'+L, ()=>{ store.put('meta','stats|'+L, st).catch(()=>{}); Cloud.put(`st_${L}`, {...st, kind:'stats'}); }, 1500);
+}
+function saveMeta(){
+  store.put('meta','settings', state.settings).catch(()=>{});
+  store.put('meta','learners', {list:state.learners, cur:state.learner, updated:Date.now()}).catch(()=>{});
+}
+
+/* ---- merges ---- */
+function mergeLearn(a, b){
+  if(!a) return clone(b); if(!b) return a;
+  const out = {marks:{}, lastPage: (b.updated>a.updated? b.lastPage : a.lastPage) ?? 0, updated: Math.max(a.updated||0, b.updated||0)};
+  const ids = new Set([...Object.keys(a.marks||{}), ...Object.keys(b.marks||{})]);
+  for(const id of ids){
+    const map = new Map();
+    for(const m of [...(a.marks?.[id]||[]), ...(b.marks?.[id]||[])]){
+      const k = m.d+'|'+m.m; const prev = map.get(k);
+      if(!prev) map.set(k, {...m}); else if(!prev.r && m.r) prev.r = m.r;
+    }
+    out.marks[id] = [...map.values()].sort((x,y)=>x.d-y.d);
+  }
+  return out;
+}
+const sameLearn = (a,b) => JSON.stringify(a?.marks||{})===JSON.stringify(b?.marks||{}) && (a?.lastPage||0)===(b?.lastPage||0);
+function mergeStats(a,b){
+  const out={days:{...(a?.days||{})}, updated:Math.max(a?.updated||0,b?.updated||0)};
+  for(const [d,v] of Object.entries(b?.days||{})){ const o=out.days[d]||{}; out.days[d]={o:Math.max(o.o||0,v.o||0),t:Math.max(o.t||0,v.t||0),x:Math.max(o.x||0,v.x||0),sec:Math.max(o.sec||0,v.sec||0)}; }
+  return out;
+}
+
+/* ---- cloud sync ---- */
+async function syncLearnerFromCloud(){
+  if(!Cloud.db) return;
+  const L = state.learner;
+  const cr = await Cloud.get(`rw_${L}`);
+  if(cr && L===state.learner){ const m=mergeRewards(state.rewards, cr); const changedLocal=JSON.stringify(m)!==JSON.stringify(state.rewards); state.rewards=m; if(changedLocal) store.put('meta','rewards|'+L,m).catch(()=>{}); if(JSON.stringify(m.spent)!==JSON.stringify(cr.spent)||JSON.stringify(m.list)!==JSON.stringify(cr.list)) Cloud.put(`rw_${L}`, {...m, kind:'rewards'}); }
+  else if(!cr && state.rewards.updated) Cloud.put(`rw_${L}`, {...state.rewards, kind:'rewards'});
+  const cs = await Cloud.get(`st_${L}`);
+  if(cs && L===state.learner){ const m=mergeStats(state.stats, cs); state.stats=m; store.put('meta','stats|'+L,m).catch(()=>{}); if(JSON.stringify(m.days)!==JSON.stringify(cs.days)) Cloud.put(`st_${L}`, {...m, kind:'stats'}); renderStats(); }
+  const docs = await Cloud.list('', ['learner','==',L]);
+  for(const {data} of docs){
+    if(data.kind!=='learn' || L!==state.learner) continue;
+    const b=data.book, local=state.learnAll.get(b);
+    const merged = mergeLearn(local, data);
+    if(!local || !sameLearn(local, merged)){ state.learnAll.set(b, merged); store.put('learn', learnKey(b,L), merged).catch(()=>{}); }
+    if(!sameLearn(merged, data)) Cloud.put(`ln_${L}_${b}`, {...merged, kind:'learn', book:b, learner:L});
+  }
+  const sh = await Cloud.list('', ['kind','==','shared']);
+  for(const {data} of sh){
+    const b=data.book, local=state.sharedAll.get(b);
+    if(!local || (data.updated||0) > (local.updated||0)){ const v={name:data.name, pages:data.pages, problems:data.problems||[], masks:data.masks||[], rot:data.rot||{}, updated:data.updated||0}; state.sharedAll.set(b,v); store.put('shared',b,v).catch(()=>{}); }
+    else if((local.updated||0) > (data.updated||0)) Cloud.put(`sh_${b}`, {...local, kind:'shared', book:b});
+  }
+  refreshDue(); updateCoins(); if(state.screen==='lib') renderLib(); if(state.book) state.pages.forEach(renderOverlay);
+}
+async function syncBookFromCloud(b){
+  if(!Cloud.db) return;
+  const L = state.learner;
+  const docs = await Cloud.list(`ln_${L}_${b}/ink`);
+  if(state.book?.id!==b || state.learner!==L) return;
+  const seen = new Set(); let changed=false;
+  for(const {id, data} of docs){
+    const p = +id.slice(1); if(!Number.isFinite(p)) continue; seen.add(p);
+    const local = state.ink.get(p);
+    if(!local || (data.updated||0) > (local.updated||0)){
+      state.ink.set(p, {items:data.items||[], memo:data.memo||[], updated:data.updated||0});
+      store.put('ink', inkKey(b,p,L), state.ink.get(p)).catch(()=>{});
+      const pg = state.pages[p]; if(pg?.rendered) drawInk(pg); changed=true;
+    } else if((local.updated||0) > (data.updated||0)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:local.updated, items:local.items, memo:local.memo||[]});
+  }
+  for(const [p,r] of state.ink) if(!seen.has(p) && (r.items.length||r.memo?.length)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
+  if(changed){ undoMain.length=0; redoMain.length=0; updUndo(); }
+}
+async function syncCfgFromCloud(){
+  if(!Cloud.db) return;
+  const c = await Cloud.get('cfg');
+  const local = await store.get('meta','learners');
+  if(c && (!local || (c.updated||0) > (local.updated||0))){ state.learners = c.list; store.put('meta','learners',{list:c.list, cur:state.learner, updated:c.updated}).catch(()=>{}); renderLearners(); }
+  else if(local && (!c || (local.updated||0) > (c.updated||0))) Cloud.put('cfg', {kind:'cfg', list:state.learners, updated:local.updated});
+}
+
+/* ================= SRS (復習) ================= */
+function srsOf(marks){
+  let st='new', box=0, due=0, last=null;
+  for(const m of [...(marks||[])].sort((a,b)=>a.d-b.d)){
+    last=m;
+    if(m.m==='o'){
+      if(st==='new') st='ok';
+      else if(st==='review'){ box++; if(box>INTERVALS.length) st='grad'; else due = m.d + INTERVALS[box-1]*DAY; }
+    } else { st='review'; box=0; due=m.d; }
+  }
+  return {st, box, due, last, left: st==='review' ? INTERVALS.length+1-box : 0};
+}
+function reviewItems(){
+  const items=[]; const eod=endOfDay();
+  for(const [b,l] of state.learnAll){
+    const sh = state.sharedAll.get(b);
+    for(const [pid, marks] of Object.entries(l.marks||{})){
+      if(!marks.length) continue;
+      let prob=null, page=null;
+      if(pid.startsWith('pg')) page=+pid.slice(2);
+      else { prob = sh?.problems?.find(q=>q.id===pid); if(!prob) continue; page=prob.p; }
+      const s = srsOf(marks);
+      items.push({b, pid, prob, page, s, isDue: s.st==='review' && s.due<=eod, book: sh?.name || '問題集'});
+    }
+  }
+  return items;
+}
+function refreshDue(){
+  const n = reviewItems().filter(i=>i.isDue).length;
+  $('#dueCount').textContent = n; $('#libDue').textContent = n ? `（${n}問）` : '';
+}
+function problemStatus(b, pid){
+  const s = srsOf(getLearn(b).marks[pid]);
+  if(s.st==='new') return {cls:'', icon:''};
+  if(s.st==='ok') return {cls:'ok', icon:'⭕'};
+  if(s.st==='grad') return {cls:'grad', icon:'🏆'};
+  return {cls:'ng', icon: s.last?.m==='o' ? '🔁' : s.last?.m==='t' ? '🔺' : '❌'};
+}
+
+/* ================= stats ================= */
+function today(){ const k=dateKey(); return state.stats.days[k] ||= {o:0,t:0,x:0,sec:0}; }
+function bumpStat(t, m, delta){ const d = state.stats.days[dateKey(t)] ||= {o:0,t:0,x:0,sec:0}; d[m]=Math.max(0,(d[m]||0)+delta); saveStats(); renderStats(); }
+function streak(){
+  let n=0; const t=new Date();
+  for(let i=0;i<400;i++){ const k=dateKey(t.getTime()-i*DAY); const d=state.stats.days[k]; const active = d && ((d.o+d.t+d.x)>0 || d.sec>=300);
+    if(active) n++; else if(i===0) continue; else break; }
+  return n;
+}
+function renderStats(){
+  const d=today(); const s=streak();
+  const txt = `今日 ⭕${d.o} 🔺${d.t} ❌${d.x}　⏱${Math.floor(d.sec/60)}分` + (s?`　🔥${s}日`:'');
+  $('#stats').textContent = txt;
+  const tb=$('#todayBox'); if(tb) tb.textContent = txt;
+}
+setInterval(()=>{
+  const active = document.visibilityState==='visible' && Date.now()-state.lastAct < 120000 &&
+    ((state.screen==='main' && state.book) || state.screen==='solve');
+  if(active){ today().sec += 15; saveStats(); renderStats(); updateCoins(); }
+}, 15000);
+
+/* ================= effects ================= */
+let ac=null;
+function audio(){ try{ ac ||= new (window.AudioContext||window.webkitAudioContext)(); if(ac.state==='suspended') ac.resume(); }catch{ ac=null; } return ac; }
+function tone(f, t0, dur, type='triangle', vol=.16){
+  const a=audio(); if(!a) return; const o=a.createOscillator(), g=a.createGain(); const now=a.currentTime;
+  o.type=type; o.frequency.value=f; g.gain.setValueAtTime(0.0001, now+t0); g.gain.exponentialRampToValueAtTime(vol, now+t0+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, now+t0+dur); o.connect(g).connect(a.destination); o.start(now+t0); o.stop(now+t0+dur+.05);
+}
+function sfx(m){
+  if(!state.settings.sound) return;
+  if(m==='o'){ tone(1047,0,.16); tone(1319,.08,.18); tone(1568,.16,.4); }
+  else if(m==='t'){ tone(784,0,.22,'sine',.12); tone(880,.1,.25,'sine',.1); }
+  else { tone(392,0,.18,'sine',.1); tone(349,.12,.25,'sine',.08); }
+}
+function confetti(x,y){
+  const cols=['#ff4d6d','#ffd23f','#3bceac','#4d8bff','#b06bff','#ff8a3d'];
+  for(let i=0;i<22;i++){
+    const s=document.createElement('div'); s.className='cf'; s.style.left=x+'px'; s.style.top=y+'px'; s.style.background=cols[i%cols.length];
+    document.body.appendChild(s);
+    const a=Math.random()*Math.PI*2, r=70+Math.random()*110;
+    const an = s.animate([{transform:'translate(-50%,-50%) rotate(0)',opacity:1},
+      {transform:`translate(${Math.cos(a)*r}px,${Math.sin(a)*r+60}px) rotate(${Math.random()*720}deg)`,opacity:0}], {duration:900+Math.random()*400, easing:'cubic-bezier(.2,.7,.3,1)'});
+    an.onfinish=()=>s.remove();
+  }
+}
+function celebrate(m, x, y){
+  sfx(m); updateCoins(x, y);
+  if(m==='o'){
+    confetti(x,y);
+    const n=today().o;
+    if(n>0 && (n===5 || n%10===0)) toast(`⭕ きょう ${n}こ！ すごい！`);
+  }
+}
+
+/* ================= drawing ================= */
+const bboxCache = new WeakMap();
+function bbox(it){
+  let b=bboxCache.get(it); if(b) return b;
+  const p=it.p; let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;
+  for(let i=0;i<p.length;i+=3){ x0=Math.min(x0,p[i]); x1=Math.max(x1,p[i]); y0=Math.min(y0,p[i+1]); y1=Math.max(y1,p[i+1]); }
+  b={x0,y0,x1,y1}; bboxCache.set(it,b); return b;
+}
+function drawItem(ctx, it, s){
+  if(it.k==='s'){
+    const p=it.p; ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle=it.c; ctx.fillStyle=it.c;
+    if(it.t==='mk'){
+      ctx.globalAlpha=.38; ctx.lineWidth=it.w*s; ctx.beginPath(); ctx.moveTo(p[0]*s,p[1]*s);
+      if(p.length===3) ctx.lineTo(p[0]*s+.5,p[1]*s); for(let i=3;i<p.length;i+=3) ctx.lineTo(p[i]*s,p[i+1]*s); ctx.stroke();
+    } else {
+      if(p.length===3){ ctx.beginPath(); ctx.arc(p[0]*s,p[1]*s,it.w*s*.5,0,Math.PI*2); ctx.fill(); }
+      for(let i=3;i<p.length;i+=3){
+        const pr=(p[i+2]+p[i-1])/200; ctx.lineWidth=Math.max(.6, it.w*s*(.45+pr*1.1));
+        ctx.beginPath(); ctx.moveTo(p[i-3]*s,p[i-2]*s); ctx.lineTo(p[i]*s,p[i+1]*s); ctx.stroke();
+      }
+    }
+    ctx.restore();
+  } else if(it.k==='m'){
+    const x=it.x*s, y=it.y*s, r=it.s*s/2; ctx.save(); ctx.strokeStyle=STAMP_C[it.m]; ctx.lineWidth=r*.17; ctx.lineCap='round'; ctx.lineJoin='round';
+    ctx.beginPath();
+    if(it.m==='o') ctx.arc(x,y,r*.82,0,Math.PI*2);
+    else if(it.m==='t'){ ctx.moveTo(x,y-r*.8); ctx.lineTo(x+r*.85,y+r*.65); ctx.lineTo(x-r*.85,y+r*.65); ctx.closePath(); }
+    else { ctx.moveTo(x-r*.7,y-r*.7); ctx.lineTo(x+r*.7,y+r*.7); ctx.moveTo(x+r*.7,y-r*.7); ctx.lineTo(x-r*.7,y+r*.7); }
+    ctx.stroke(); ctx.restore();
+  }
+}
+function drawAll(cv, items, s){ const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height); s ??= cv.width/10000; for(const it of items) drawItem(ctx,it,s); }
+function segDist2(px,py,ax,ay,bx,by){ const dx=bx-ax, dy=by-ay; const l=dx*dx+dy*dy; let t=l?((px-ax)*dx+(py-ay)*dy)/l:0; t=Math.max(0,Math.min(1,t)); const x=ax+t*dx-px, y=ay+t*dy-py; return x*x+y*y; }
+function hitStroke(it, pt, rad){
+  const b=bbox(it); const R=rad+it.w/2;
+  if(pt.x<b.x0-R||pt.x>b.x1+R||pt.y<b.y0-R||pt.y>b.y1+R) return false;
+  const p=it.p, R2=R*R;
+  if(p.length===3) return (p[0]-pt.x)**2+(p[1]-pt.y)**2<R2;
+  for(let i=3;i<p.length;i+=3) if(segDist2(pt.x,pt.y,p[i-3],p[i-2],p[i],p[i+1])<R2) return true;
+  return false;
+}
+const pressureOf = e => rnd(100 * ((e.pointerType==='pen' && e.pressure>0) ? e.pressure : .5));
+
+/* ================= undo ================= */
+const undoMain=[], redoMain=[], undoRv=[], redoRv=[];
+const stacks = () => state.screen==='solve' ? [undoRv, redoRv] : [undoMain, redoMain];
+function pushUndo(op, which){ const [u,r] = which==='rv' ? [undoRv,redoRv] : [undoMain,redoMain]; u.push(op); if(u.length>300) u.shift(); r.length=0; updUndo(); }
+function doUndo(){ const [u,r]=stacks(); const op=u.pop(); if(!op) return; op.undo(); r.push(op); updUndo(); }
+function doRedo(){ const [u,r]=stacks(); const op=r.pop(); if(!op) return; op.redo(); u.push(op); updUndo(); }
+function updUndo(){ $('#btnUndo').disabled=!undoMain.length; $('#btnRedo').disabled=!redoMain.length; }
+
+/* ================= input controller ================= */
+const touches = new Map(); let pan=null, cur=null, tapC=null;
+const live = document.createElement('canvas'); live.className='live';
+let liveRAF=0;
+function scheduleLive(){ if(liveRAF) return; liveRAF=requestAnimationFrame(()=>{ liveRAF=0; if(cur?.kind!=='stroke') return; const ctx=live.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,live.width,live.height); if(cur.T.drawLive) cur.T.drawLive(ctx, cur.item); else drawItem(ctx, cur.item, live.width/10000); }); }
+function toNorm(e, el, T){ if(T.toPt) return T.toPt(e); const r=el.getBoundingClientRect(); const k=10000/T.getW(); return {x:(e.clientX-r.left)*k, y:(e.clientY-r.top)*k}; }
+const mid = () => { const v=[...touches.values()]; return {x:(v[0].x+v[1].x)/2, y:(v[0].y+v[1].y)/2}; };
+function notePen(){
+  if(state.settings.penSeen) return;
+  state.settings.penSeen=true;
+  if(state.settings.fingerDraw){ state.settings.fingerDraw=false; applyTouchMode(); toast('Apple Pencilを見つけました。これから指はスクロール用です（⋯ で変更できます）', 5500); }
+  saveMeta();
+}
+function applyTouchMode(){
+  const drawTool = !['hand'].includes(state.screen==='solve' ? 'pen' : state.tool);
+  document.body.classList.toggle('fd', state.settings.fingerDraw && drawTool);
+}
+function attachInput(el, T){ el.addEventListener('pointerdown', e=>onDown(e,el,T)); }
+// 指やペンを離した合図は、どこで起きても必ず受け取る（取りこぼして描けなくなるのを防ぐ）
+window.addEventListener('pointermove', e=>onMove(e), true);
+window.addEventListener('pointerup', e=>onUp(e,false), true);
+window.addEventListener('pointercancel', e=>onUp(e,true), true);
+window.addEventListener('blur', ()=>{ touches.clear(); pan=null; if(cur) finishCur(cur, false); cur=null; });
+function onDown(e, el, T){
+  state.lastAct=Date.now();
+  if(e.pointerType==='pen') notePen();
+  if(e.pointerType==='touch' && e.isPrimary){ touches.clear(); pan=null; }   // 1本目の指＝前の記録は古い
+  if(cur && cur.id!==e.pointerId && (e.pointerType!=='touch' || cur.pointerType==='touch')){ const c=cur; cur=null; finishCur(c,false); } // 前の線が終わっていなければ確定
+  if(e.pointerType==='touch'){
+    touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
+  }
+  const tool=T.tool();
+  const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
+  if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
+  if(cur || !T.canDraw()) return;
+  e.preventDefault();
+  try{ startCur(e, el, T, tool); }catch(err){ console.warn(err); live.remove(); cur=null; }
+}
+function startCur(e, el, T, tool){
+  try{ el.setPointerCapture(e.pointerId); }catch{}
+  const pt=toNorm(e,el,T);
+  if(tool==='pen'||tool==='marker'){
+    const mk = tool==='marker';
+    const item={k:'s', t:mk?'mk':'pen', c: mk ? state.settings.mk : state.settings.pen, w: mk ? MK_W[state.mkW] : PEN_W[state.penW], p:[rnd(pt.x),rnd(pt.y),pressureOf(e)]};
+    if(T.forceColor) item.c=T.forceColor;
+    cur={kind:'stroke', id:e.pointerId, pointerType:e.pointerType, el, T, item, k: T.unitsPerPx ? T.unitsPerPx() : 10000/T.getW()};
+    if(T.liveSetup) T.liveSetup(live); else { const ic=T.inkCanvas(); live.width=ic.width; live.height=ic.height; live.style.left='0'; live.style.top='0'; live.style.width=ic.style.width||'100%'; live.style.height=ic.style.height||'100%'; }
+    el.appendChild(live); scheduleLive();
+  } else if(tool==='eraser'){
+    cur={kind:'erase', id:e.pointerId, pointerType:e.pointerType, el, T, removed:[]}; eraseAt(cur, pt);
+  } else if(tool==='o'||tool==='t'||tool==='x'){
+    T.stamp?.(pt, tool, e);
+  } else if((tool==='region'||tool==='mask') && T.rect){
+    const rb=document.createElement('div'); rb.className='rubber '+tool; T.ovEl().appendChild(rb);
+    cur={kind:'rect', id:e.pointerId, pointerType:e.pointerType, el, T, x0:pt.x, y0:pt.y, rb, tool, last:pt}; setRect(rb, T.dispRect({x:pt.x,y:pt.y,w:0,h:0}));
+  }
+}
+function onMove(e){
+  if(e.pointerType==='touch' && touches.has(e.pointerId)){
+    touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pan && touches.size>=2){ const m=mid(); pan.scroller.scrollBy(pan.x-m.x, pan.y-m.y); pan.x=m.x; pan.y=m.y; return; }
+  }
+  if(tapC && tapC.id===e.pointerId && Math.hypot(e.clientX-tapC.x, e.clientY-tapC.y)>12) tapC=null;
+  if(!cur || cur.id!==e.pointerId) return;
+  e.preventDefault(); state.lastAct=Date.now();
+  let evs = e.getCoalescedEvents ? e.getCoalescedEvents() : []; if(!evs.length) evs=[e];
+  if(cur.kind==='stroke'){
+    const p=cur.item.p;
+    for(const ev of evs){ const pt=toNorm(ev,cur.el,cur.T); if(Math.hypot(pt.x-p[p.length-3], pt.y-p[p.length-2]) < .7*cur.k) continue; p.push(rnd(pt.x),rnd(pt.y),pressureOf(ev)); }
+    scheduleLive();
+  } else if(cur.kind==='erase'){ for(const ev of evs) eraseAt(cur, toNorm(ev,cur.el,cur.T)); }
+  else if(cur.kind==='rect'){ const pt=toNorm(e,cur.el,cur.T); cur.last=pt; setRect(cur.rb, cur.T.dispRect(normRect(cur.x0,cur.y0,pt.x,pt.y))); }
+}
+function onUp(e, cancel){
+  if(e.pointerType==='touch'){ touches.delete(e.pointerId); if(touches.size<2) pan=null; }
+  if(tapC && tapC.id===e.pointerId){ const t=tapC; tapC=null; if(!cancel && Date.now()-t.t<500) t.T.tap?.(toNorm(e,t.el,t.T), e); }
+  if(!cur || cur.id!==e.pointerId) return;
+  const c=cur; cur=null; finishCur(c, cancel);
+}
+function finishCur(c, cancel){
+  try{
+    if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return; c.T.addStroke(c.item); }
+    else if(c.kind==='erase'){ if(c.removed.length) c.T.commitErase(c.removed); }
+    else if(c.kind==='rect'){ c.rb.remove(); const r=normRect(c.x0,c.y0,c.last.x,c.last.y); if(!cancel && r.w>120 && r.h>80) c.T.rect(c.tool, r); }
+  }catch(err){ console.warn(err); }
+}
+function abortCur(){ if(!cur) return; if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
+function eraseAt(c, pt){
+  const items=c.T.items(); let ch=false;
+  for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
+  if(ch) c.T.inkRedraw();
+}
+const normRect = (x0,y0,x1,y1) => ({x:rnd(Math.min(x0,x1)), y:rnd(Math.min(y0,y1)), w:rnd(Math.abs(x1-x0)), h:rnd(Math.abs(y1-y0))});
+function setRect(d,r){ d.style.setProperty('--x',r.x); d.style.setProperty('--y',r.y); d.style.setProperty('--w',r.w); d.style.setProperty('--h',r.h); }
+// Pencil は常に描画、指だけスクロールさせる（iPadOS Safari の touchType）
+function guardStylus(el){
+  const h = e => { if(state.screen!=='solve' && state.tool==='hand') return; for(const t of e.touches) if(t.touchType==='stylus'){ e.preventDefault(); return; } };
+  el.addEventListener('touchstart', h, {passive:false}); el.addEventListener('touchmove', h, {passive:false});
+}
+
+/* ================= pages ================= */
+let io=null;
+function pixelRatioFor(w,h){ let r=Math.min(window.devicePixelRatio||1, 2); const max=9e6; if(w*h*r*r>max) r=Math.sqrt(max/(w*h)); return r; }
+/* --- 回転：書き込みは「元の向き」の座標で保存し、表示の時だけ回す --- */
+function geomOf(a, rot){
+  const H=10000*a; let m, Dw, Dh;
+  if(rot===90){ m=[0,1,-1,0,H,0]; Dw=H; Dh=10000; }
+  else if(rot===180){ m=[-1,0,0,-1,10000,H]; Dw=10000; Dh=H; }
+  else if(rot===270){ m=[0,-1,1,0,0,10000]; Dw=H; Dh=10000; }
+  else { rot=0; m=[1,0,0,1,0,0]; Dw=10000; Dh=H; }
+  return {rot, a, H, m, Dw, Dh};
+}
+const toD=(g,x,y)=>({x:g.m[0]*x+g.m[2]*y+g.m[4], y:g.m[1]*x+g.m[3]*y+g.m[5]});
+function toB(g,x,y){ const H=g.H; switch(g.rot){ case 90: return {x:y, y:H-x}; case 180: return {x:10000-x, y:H-y}; case 270: return {x:10000-y, y:x}; default: return {x,y}; } }
+function rectMap(f, g, r){ const a=f(g,r.x,r.y), b=f(g,r.x+r.w,r.y+r.h); return {x:Math.min(a.x,b.x), y:Math.min(a.y,b.y), w:Math.abs(b.x-a.x), h:Math.abs(b.y-a.y)}; }
+const pageRot = p => ((state.shared?.rot?.[p])||0);
+function drawOnPage(ctx, items, g, k, ox=0, oy=0){
+  for(const it of items){
+    if(it.k==='m'){ ctx.setTransform(k,0,0,k,-ox,-oy); const d=toD(g,it.x,it.y); drawItem(ctx, {...it, x:d.x, y:d.y}, 1); }
+    else { const m=g.m; ctx.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],k*m[4]-ox,k*m[5]-oy); drawItem(ctx, it, 1); }
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+}
+function buildPages(){
+  const host=$('#pages'); host.innerHTML=''; state.pages=[];
+  io?.disconnect();
+  io=new IntersectionObserver(ents=>{ for(const en of ents){ const pg=state.pages[+en.target.dataset.p]; if(!pg) continue; if(en.isIntersecting) renderPage(pg); else unrenderPage(pg); } }, {root:$('#viewer'), rootMargin:'80% 0px'});
+  for(let i=0;i<state.book.pages;i++){
+    const el=document.createElement('div'); el.className='page'; el.dataset.p=i;
+    el.innerHTML='<canvas class="pdf"></canvas><canvas class="ink"></canvas><div class="ov"></div><div class="pno">'+(i+1)+'</div>';
+    host.appendChild(el);
+    const pg={i, el, pdfCv:el.children[0], inkCv:el.children[1], ov:el.children[2], rendered:false, task:null, gen:0, w:0, h:0, px:0, g:null};
+    state.pages.push(pg); attachInput(el, pageTarget(pg));
+  }
+  layoutPages();
+  for(const pg of state.pages) io.observe(pg.el);
+}
+function layoutPages(){
+  const vw=$('#viewer').clientWidth; const base=Math.min(vw-24, 1100);
+  state.pages.forEach((pg,i)=>{
+    pg.g=geomOf(state.book.aspects[i]||1.414, pageRot(i));
+    // 横向きページは同じ幅に入れると小さくなりすぎるので、縦向きと同じ高さ感にそろえる
+    const W=Math.round(base*state.zoom);
+    pg.w=W; pg.h=Math.round(W*pg.g.Dh/pg.g.Dw);
+    pg.el.style.width=pg.w+'px'; pg.el.style.height=pg.h+'px'; pg.el.style.setProperty('--u', pg.w/pg.g.Dw);
+  });
+}
+async function renderPage(pg){
+  if(pg.rendered) return; pg.rendered=true; const gen=++pg.gen;
+  const r=pixelRatioFor(pg.w,pg.h); const cw=Math.floor(pg.w*r), ch=Math.floor(pg.h*r);
+  for(const cv of [pg.pdfCv,pg.inkCv]){ cv.width=cw; cv.height=ch; cv.style.width=pg.w+'px'; cv.style.height=pg.h+'px'; }
+  pg.px = cw/pg.g.Dw; pg.ratio=r;
+  drawInk(pg); renderOverlay(pg);
+  try{
+    const page=await state.pdf.getPage(pg.i+1); if(gen!==pg.gen) return;
+    const rotation=((page.rotate||0)+pg.g.rot)%360;
+    const vp1=page.getViewport({scale:1, rotation}); const vp=page.getViewport({scale:cw/vp1.width, rotation});
+    const ctx=pg.pdfCv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cw,ch);
+    pg.task=page.render({canvasContext:ctx, viewport:vp}); await pg.task.promise;
+  }catch(e){ if(e?.name!=='RenderingCancelledException') console.warn(e); }
+  finally{ if(gen===pg.gen) pg.task=null; }
+  scheduleDetails();
+}
+/* --- 大きく拡大したときは、見えている部分だけを高画質で描き直す --- */
+const wantRatio = () => Math.min(window.devicePixelRatio||1, 2);
+function scheduleDetails(){ debounce('detail', ()=>{ if(!state.book) return; for(const pg of state.pages){ if(pg.rendered && pg.ratio < wantRatio()*.9) renderDetail(pg); else removeDetail(pg); } }, 160); }
+async function renderDetail(pg){
+  const v=$('#viewer'), vr=v.getBoundingClientRect(), pr=pg.el.getBoundingClientRect();
+  const mx=vr.width*.15, my=vr.height*.15;
+  const x0=Math.max(0, vr.left-mx-pr.left), y0=Math.max(0, vr.top-my-pr.top);
+  const x1=Math.min(pg.w, vr.right+mx-pr.left), y1=Math.min(pg.h, vr.bottom+my-pr.top);
+  if(x1<=x0 || y1<=y0){ removeDetail(pg); return; }
+  const rect={x:Math.floor(x0), y:Math.floor(y0), w:Math.ceil(x1-x0), h:Math.ceil(y1-y0)};
+  let rD=wantRatio(); if(rect.w*rect.h*rD*rD>8e6) rD=Math.sqrt(8e6/(rect.w*rect.h));
+  if(rD <= pg.ratio*1.05){ removeDetail(pg); return; }
+  const o=pg.detail;
+  if(o && Math.abs(o.r-rD)<.01 && o.rect.x<=rect.x && o.rect.y<=rect.y && o.rect.x+o.rect.w>=rect.x+rect.w && o.rect.y+o.rect.h>=rect.y+rect.h) return;
+  pg.dgen=(pg.dgen||0)+1; const gen=pg.dgen; try{ pg.dtask?.cancel(); }catch{}
+  const el=document.createElement('div'); el.style.cssText=`position:absolute;left:${rect.x}px;top:${rect.y}px;width:${rect.w}px;height:${rect.h}px;pointer-events:none`;
+  const pc=document.createElement('canvas'), ic=document.createElement('canvas');
+  for(const c of [pc,ic]){ c.width=Math.floor(rect.w*rD); c.height=Math.floor(rect.h*rD); c.style.cssText=`position:absolute;left:0;top:0;width:${rect.w}px;height:${rect.h}px`; }
+  el.append(pc,ic);
+  try{
+    const page=await state.pdf.getPage(pg.i+1); if(gen!==pg.dgen || !pg.rendered) return;
+    const rotation=((page.rotate||0)+pg.g.rot)%360, vp1=page.getViewport({scale:1, rotation});
+    const vp=page.getViewport({scale:pg.w*rD/vp1.width, rotation, offsetX:-rect.x*rD, offsetY:-rect.y*rD});
+    const ctx=pc.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,pc.width,pc.height);
+    pg.dtask=page.render({canvasContext:ctx, viewport:vp}); await pg.dtask.promise; pg.dtask=null;
+  }catch(e){ if(e?.name!=='RenderingCancelledException') console.warn(e); return; }
+  if(gen!==pg.dgen || !pg.rendered){ pc.width=pc.height=ic.width=ic.height=0; return; }
+  dropDetail(pg); pg.detail={el,pc,ic,rect,r:rD}; pg.el.insertBefore(el, pg.ov); drawDetailInk(pg);
+}
+function dropDetail(pg){ const d=pg.detail; if(!d) return; d.el.remove(); d.pc.width=d.pc.height=d.ic.width=d.ic.height=0; pg.detail=null; }
+function removeDetail(pg){ pg.dgen=(pg.dgen||0)+1; try{ pg.dtask?.cancel(); }catch{} pg.dtask=null; dropDetail(pg); }
+const detailK = pg => pg.detail.r*pg.w/pg.g.Dw;
+function drawDetailInk(pg){ const d=pg.detail; if(!d) return; const ctx=d.ic.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,d.ic.width,d.ic.height); drawOnPage(ctx, getInk(pg.i).items, pg.g, detailK(pg), d.rect.x*d.r, d.rect.y*d.r); }
+function unrenderPage(pg){
+  if(!pg.rendered) return; pg.rendered=false; pg.gen++;
+  try{ pg.task?.cancel(); }catch{} pg.task=null; removeDetail(pg);
+  pg.pdfCv.width=pg.pdfCv.height=0; pg.inkCv.width=pg.inkCv.height=0; pg.ov.innerHTML='';
+}
+function drawInk(pg){ if(!pg.rendered) return; const ctx=pg.inkCv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,pg.inkCv.width,pg.inkCv.height); drawOnPage(ctx, getInk(pg.i).items, pg.g, pg.px); drawDetailInk(pg); }
+function renderOverlay(pg){
+  if(!pg.rendered) return; const ov=pg.ov; ov.innerHTML=''; const p=pg.i, sh=state.shared, b=state.book.id;
+  for(const m of sh.masks){ if(m.p!==p) continue;
+    const d=document.createElement('div'); d.className='mask'+((state.revealAll||state.revealed.has(m.id))?' open':''); setRect(d, rectMap(toD,pg.g,m));
+    if(state.tool==='mask') addDel(d, ()=>removeShared('masks', m, p)); ov.appendChild(d); }
+  for(const q of sh.problems){ if(q.p!==p) continue;
+    const d=document.createElement('div'); d.className='region'; setRect(d, rectMap(toD,pg.g,q)); const st=problemStatus(b, q.id);
+    d.innerHTML=`<span class="badge ${st.cls}">${st.icon} 問${q.n}</span>`;
+    if(state.tool==='region') addDel(d, ()=>removeShared('problems', q, p)); ov.appendChild(d); }
+}
+function addDel(d, fn){ const x=document.createElement('div'); x.className='del'; x.textContent='×'; x.addEventListener('pointerdown', e=>{ e.stopPropagation(); e.preventDefault(); fn(); }); d.appendChild(x); }
+function removeShared(list, obj, p){
+  const arr=state.shared[list]; const i=arr.indexOf(obj); if(i<0) return;
+  const b=state.book.id;
+  const undo=()=>{ arr.splice(Math.min(i,arr.length),0,obj); saveShared(b); renderOverlay(state.pages[p]); refreshDue(); };
+  const redo=()=>{ const j=arr.indexOf(obj); if(j>=0) arr.splice(j,1); saveShared(b); renderOverlay(state.pages[p]); refreshDue(); };
+  redo(); pushUndo({undo,redo});
+}
+function pageTarget(pg){
+  const p=pg.i;
+  return {
+    getW:()=>pg.w, ownPinch:true, unitsPerPx:()=>pg.g.Dw/pg.w, tool:()=>state.tool, canDraw:()=>pg.rendered, scroller:()=>$('#viewer'),
+    toPt(e){ const r=pg.el.getBoundingClientRect(); const k=pg.g.Dw/pg.w; return toB(pg.g, (e.clientX-r.left)*k, (e.clientY-r.top)*k); },
+    dispRect:r=>rectMap(toD,pg.g,r),
+    liveSetup(lv){
+      const d=pg.detail;
+      if(d){ lv.width=d.ic.width; lv.height=d.ic.height; lv.style.left=d.rect.x+'px'; lv.style.top=d.rect.y+'px'; lv.style.width=d.rect.w+'px'; lv.style.height=d.rect.h+'px'; }
+      else { lv.width=pg.inkCv.width; lv.height=pg.inkCv.height; lv.style.left='0'; lv.style.top='0'; lv.style.width=pg.w+'px'; lv.style.height=pg.h+'px'; }
+      pg.liveD = d || null;
+    },
+    drawLive(ctx,item){ const d=pg.liveD; if(d && d===pg.detail) drawOnPage(ctx,[item],pg.g,detailK(pg),d.rect.x*d.r,d.rect.y*d.r); else drawOnPage(ctx,[item],pg.g,pg.px); },
+    items:()=>getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
+    inkRedraw:()=>drawInk(pg),
+    addStroke(item){
+      const rec=getInk(p); rec.items.push(item); drawOnPage(pg.inkCv.getContext('2d'), [item], pg.g, pg.px);
+      const d=pg.detail; if(d) drawOnPage(d.ic.getContext('2d'), [item], pg.g, detailK(pg), d.rect.x*d.r, d.rect.y*d.r); saveInk(p);
+      pushUndo({undo:()=>{ const r=getInk(p); const j=r.items.indexOf(item); if(j>=0) r.items.splice(j,1); drawInk(pg); saveInk(p); },
+                redo:()=>{ getInk(p).items.push(item); drawInk(pg); saveInk(p); }});
+    },
+    commitErase(list){
+      saveInk(p);
+      pushUndo({undo:()=>{ getInk(p).items.push(...list); drawInk(pg); saveInk(p); },
+                redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); saveInk(p); }});
+    },
+    stamp(pt, m, e){ stampAt(pg, pt, m, e); },
+    rect(kind, r){
+      const b=state.book.id, sh=state.shared;
+      if(kind==='region'){
+        const n=Math.max(0,...sh.problems.map(q=>q.n||0))+1;
+        const q={id:uid('q'), p, ...r, n};
+        const redo=()=>{ sh.problems.push(q); saveShared(b); renderOverlay(pg); };
+        const undo=()=>{ const j=sh.problems.indexOf(q); if(j>=0) sh.problems.splice(j,1); saveShared(b); renderOverlay(pg); refreshDue(); };
+        redo(); pushUndo({undo,redo}); toast(`問${n} を登録しました`, 1400);
+      } else {
+        const m={id:uid('k'), p, ...r};
+        const redo=()=>{ sh.masks.push(m); saveShared(b); renderOverlay(pg); };
+        const undo=()=>{ const j=sh.masks.indexOf(m); if(j>=0) sh.masks.splice(j,1); saveShared(b); renderOverlay(pg); };
+        redo(); pushUndo({undo,redo});
+      }
+    },
+    tap(pt){
+      const hit = state.shared.masks.filter(m=>m.p===p && pt.x>=m.x && pt.x<=m.x+m.w && pt.y>=m.y && pt.y<=m.y+m.h);
+      if(!hit.length) return;
+      if(state.revealAll){ state.revealAll=false; state.revealed=new Set(state.shared.masks.map(m=>m.id)); }
+      for(const m of hit){ state.revealed.has(m.id) ? state.revealed.delete(m.id) : state.revealed.add(m.id); }
+      renderOverlay(pg); renderMaskBtn();
+    }
+  };
+}
+function findProblem(p, pt){
+  const c = state.shared.problems.filter(q=>q.p===p && pt.x>=q.x && pt.x<=q.x+q.w && pt.y>=q.y && pt.y<=q.y+q.h);
+  c.sort((a,b)=>a.w*a.h-b.w*b.h); return c[0]?.id || null;
+}
+function stampAt(pg, pt, m, e){
+  const p=pg.i, b=state.book.id, rec=getInk(p);
+  const near = rec.items.find(it=>it.k==='m' && Math.hypot(it.x-pt.x, it.y-pt.y) < it.s*.5);
+  const learn=getLearn(b);
+  if(near){ // もう一度タップで消す
+    const pid=near.pid; let saved=null, idx=-1;
+    const redo=()=>{ const j=getInk(p).items.indexOf(near); if(j>=0) getInk(p).items.splice(j,1);
+      const arr=learn.marks[pid]||[]; idx=arr.findIndex(x=>x.sid===near.id); if(idx>=0){ saved=arr[idx]; arr.splice(idx,1); bumpStat(saved.d, saved.m, -1); }
+      drawInk(pg); saveInk(p); saveLearn(b); renderOverlay(pg); updateCoins(); };
+    const undo=()=>{ getInk(p).items.push(near); if(saved){ (learn.marks[pid] ||= []).push(saved); bumpStat(saved.d, saved.m, +1); }
+      drawInk(pg); saveInk(p); saveLearn(b); renderOverlay(pg); updateCoins(); };
+    redo(); pushUndo({undo,redo}); return;
+  }
+  const pid = findProblem(p, pt) || ('pg'+p);
+  const it={k:'m', m, x:rnd(pt.x), y:rnd(pt.y), s:STAMP_S, id:uid('s'), pid};
+  const mark={m, d:Date.now(), sid:it.id};
+  const redo=()=>{ getInk(p).items.push(it); (learn.marks[pid] ||= []).push(mark); bumpStat(mark.d, m, +1); drawInk(pg); saveInk(p); saveLearn(b); renderOverlay(pg); };
+  const undo=()=>{ const r=getInk(p); const j=r.items.indexOf(it); if(j>=0) r.items.splice(j,1);
+    const arr=learn.marks[pid]||[]; const k=arr.indexOf(mark); if(k>=0){ arr.splice(k,1); bumpStat(mark.d, m, -1); }
+    drawInk(pg); saveInk(p); saveLearn(b); renderOverlay(pg); updateCoins(); };
+  redo(); pushUndo({undo,redo});
+  celebrate(m, e.clientX, e.clientY);
+  if(m!=='o') askReason(mark, b);
+}
+
+/* ================= rotate ================= */
+function rotatePages(list){
+  if(!state.book) return; const b=state.book.id, sh=state.shared;
+  const before=clone(sh.rot||{});
+  const apply=(r)=>{ sh.rot=r; saveShared(b); relayout(); };
+  const after={...before}; for(const p of list){ after[p]=(((after[p]||0)+90)%360); if(!after[p]) delete after[p]; }
+  apply(clone(after)); pushUndo({undo:()=>apply(clone(before)), redo:()=>apply(clone(after))});
+}
+
+/* ================= current page / zoom ================= */
+function currentPageFromScroll(){
+  const v=$('#viewer'); const y=v.scrollTop + v.clientHeight*.35;
+  for(const pg of state.pages){ if(pg.el.offsetTop + pg.h >= y) return pg.i; }
+  return state.pages.length-1;
+}
+$('#viewer').addEventListener('scroll', ()=>{
+  state.lastAct=Date.now(); if(!state.book) return;
+  scheduleDetails();
+  const p=currentPageFromScroll(); if(p!==state.curPage){ state.curPage=p; renderPageBtn(); if(state.memoOpen) showMemoFor(p); }
+  debounce('lastpage', ()=>{ if(!state.book) return; const l=getLearn(state.book.id); if(l.lastPage!==state.curPage){ l.lastPage=state.curPage; saveLearn(state.book.id); } }, 2500);
+}, {passive:true});
+function renderPageBtn(){ $('#btnPage').textContent = `${state.curPage+1} / ${state.book?.pages||1}`; }
+function scrollToPage(p){ const pg=state.pages[Math.max(0,Math.min(p,state.pages.length-1))]; if(pg) $('#viewer').scrollTop = pg.el.offsetTop - 12; }
+const ZMIN=.5, ZMAX=10;
+// 画面上の点(sx,sy)の下にある場所を、拡大後も同じ位置に保つ
+function zoomAround(z, sx, sy){
+  if(!state.book) return; z=Math.max(ZMIN, Math.min(ZMAX, Math.round(z*100)/100));
+  const v=$('#viewer'); const r=v.getBoundingClientRect();
+  const cx=v.scrollLeft+sx-r.left, cy=v.scrollTop+sy-r.top;
+  let pg=state.pages.find(q=>q.el.offsetTop+q.h>=cy) || state.pages[state.pages.length-1];
+  const fx=(cx-pg.el.offsetLeft)/pg.w, fy=(cy-pg.el.offsetTop)/pg.h;
+  state.zoom=z; state.pages.forEach(unrenderPage); layoutPages();
+  v.scrollTop = pg.el.offsetTop + fy*pg.h - (sy-r.top);
+  v.scrollLeft = pg.el.offsetLeft + fx*pg.w - (sx-r.left);
+  io.disconnect(); state.pages.forEach(x=>io.observe(x.el));
+  store.put('meta','zoom',z).catch(()=>{});
+  scheduleDetails();
+}
+function setZoom(z){ const v=$('#viewer'), r=v.getBoundingClientRect(); zoomAround(z, r.left+r.width/2, r.top+r.height*.35); }
+function relayout(){ if(!state.book) return; zoomAround(state.zoom, $('#viewer').getBoundingClientRect().left + 10, $('#viewer').getBoundingClientRect().top + 10); }
+let resizeT; window.addEventListener('resize', ()=>{ clearTimeout(resizeT); resizeT=setTimeout(()=>{ if(state.book && state.screen==='main') relayout(); if(state.memoOpen) placeMemo(); placeRed(); }, 250); });
+/* ピンチで拡大・縮小（2本指）。指を離すと、その倍率できれいに描き直す */
+(()=>{
+  const v=$('#viewer'), pages=$('#pages'); let pin=null;
+  const fingers = e => [...e.touches].filter(t=>t.touchType!=='stylus');
+  const dist = t => Math.hypot(t[0].clientX-t[1].clientX, t[0].clientY-t[1].clientY);
+  const midp = t => ({x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2});
+  v.addEventListener('touchstart', e=>{
+    const t=fingers(e); if(t.length!==2 || !state.book) return;
+    e.preventDefault(); abortCur();
+    const m=midp(t), r=v.getBoundingClientRect();
+    pin={d0:dist(t), m0:m, m, s:1, ox:v.scrollLeft+m.x-r.left, oy:v.scrollTop+m.y-r.top};
+    pages.style.transformOrigin=`${pin.ox}px ${pin.oy}px`;
+  }, {passive:false});
+  v.addEventListener('touchmove', e=>{
+    if(!pin) return; const t=fingers(e); if(t.length<2) return; e.preventDefault();
+    pin.m=midp(t); pin.s=Math.max(ZMIN/state.zoom, Math.min(ZMAX/state.zoom, dist(t)/pin.d0));
+    pages.style.transform=`translate(${pin.m.x-pin.m0.x}px,${pin.m.y-pin.m0.y}px) scale(${pin.s})`;
+  }, {passive:false});
+  const end = e=>{
+    if(!pin || fingers(e).length>=2) return; const p=pin; pin=null;
+    pages.style.transform=''; pages.style.transformOrigin='';
+    const r=v.getBoundingClientRect();
+    if(Math.abs(p.s-1)<0.03){ v.scrollLeft-= (p.m.x-p.m0.x); v.scrollTop-=(p.m.y-p.m0.y); return; }
+    // ピンチ開始時の点を、指を離した位置に合わせる
+    v.scrollLeft = p.ox - (p.m0.x - r.left); v.scrollTop = p.oy - (p.m0.y - r.top);
+    zoomAround(state.zoom*p.s, p.m0.x, p.m0.y);
+    v.scrollLeft -= (p.m.x-p.m0.x); v.scrollTop -= (p.m.y-p.m0.y);
+  };
+  v.addEventListener('touchend', end); v.addEventListener('touchcancel', end);
+  document.addEventListener('gesturestart', e=>e.preventDefault());
+})();
+
+/* ================= toolbar ================= */
+function renderTools(){
+  $('#toolBtns').innerHTML = TOOLS.map(([id,ic,lb])=>`<button class="tool ${state.tool===id?'on':''}" data-tool="${id}">${ic}<small>${lb}</small></button>`).join('');
+  const o=$('#opts'); const t=state.tool;
+  const S=state.settings;
+  const sw=(kind,list,cur)=>list.map(c=>`<button class="sw ${c.toLowerCase()===cur.toLowerCase()?'on':''}" data-col="${kind}|${c}" style="background:${c}"></button>`).join('')
+     + `<button class="sw pal" data-pal="${kind}" aria-label="ほかの色">🎨</button>`;
+  if(t==='pen') o.innerHTML = sw('pen', S.penRecent, S.pen) +
+     PEN_W.map((w,i)=>`<button class="wd ${state.penW===i?'on':''}" data-pw="${i}"><i style="height:${2+i*2.5}px"></i></button>`).join('');
+  else if(t==='marker') o.innerHTML = sw('mk', S.mkRecent, S.mk) +
+     MK_W.map((w,i)=>`<button class="wd ${state.mkW===i?'on':''}" data-mw="${i}"><i style="height:${6+i*4}px;opacity:.5"></i></button>`).join('');
+  else o.innerHTML = `<div class="hint">${({hand:'指でスクロール。穴うめをタップで開く',eraser:'なぞった線を消す',o:'タップで押す。もう一度タップで取り消し',t:'タップで押す。もう一度タップで取り消し',x:'タップで押す。もう一度タップで取り消し',region:'1問ぶんを指やペンで囲むと「問題」として登録',mask:'かくしたい所を囲む。「見る」でタップすると開く'})[t]}</div>`;
+  applyTouchMode(); renderToolsMin();
+  if(state.book) state.pages.forEach(renderOverlay);
+}
+$('#tools').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.tool){ state.tool=b.dataset.tool; renderTools(); store.put('meta','tool',state.tool).catch(()=>{}); }
+  else if(b.dataset.col){ const [k,c]=b.dataset.col.split('|'); setColor(k,c); }
+  else if(b.dataset.pal){ openPalette(b.dataset.pal); }
+  else if(b.dataset.pw){ state.penW=+b.dataset.pw; renderTools(); }
+  else if(b.dataset.mw){ state.mkW=+b.dataset.mw; renderTools(); }
+});
+function setColor(kind, hex){
+  const S=state.settings; hex=hex.toLowerCase();
+  if(kind==='pen'){ S.pen=hex; S.penRecent=[hex, ...S.penRecent.filter(c=>c.toLowerCase()!==hex)].slice(0,4); }
+  else { S.mk=hex; S.mkRecent=[hex, ...S.mkRecent.filter(c=>c.toLowerCase()!==hex)].slice(0,4); }
+  saveMeta(); renderTools();
+  if(kind==='pen' && hex===RED_SHEET_HEX) toast('このオレンジで書くと、🟥赤シートで隠れます', 2600);
+}
+function openPalette(kind){
+  const S=state.settings, list = kind==='pen' ? PEN_COLORS : MK_COLORS, cur = kind==='pen' ? S.pen : S.mk;
+  const mine = (kind==='pen' ? S.penMine : S.mkMine) || [];
+  const cell=(c,n)=>`<button data-c="${c}" style="display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 2px;border-radius:12px;${c.toLowerCase()===cur.toLowerCase()?'background:var(--accent-soft);outline:2px solid var(--accent)':''}">
+      <span style="width:40px;height:40px;border-radius:50%;background:${c};box-shadow:0 0 0 1.5px var(--line) inset${kind==='mk'?';opacity:.75':''}"></span><span style="font-size:11px;color:var(--sub);line-height:1.2">${esc(n)}</span></button>`;
+  openSheet(`<h3>🎨 ${kind==='pen'?'ペン':'マーカー'}の色</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-bottom:14px">${list.map(([c,n])=>cell(c,n)).join('')}</div>
+    ${mine.length?`<p class="note" style="margin-bottom:6px">じぶんで作った色</p><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:6px;margin-bottom:14px">${mine.map(c=>cell(c,'')).join('')}</div>`:''}
+    <div class="row" style="margin-bottom:14px"><label class="btn sub" style="display:flex;align-items:center;gap:8px;position:relative">
+      ＋ 好きな色を作る<input type="color" id="colPick" value="${cur}" style="width:34px;height:30px;border:0;padding:0;background:none"></label></div>
+    <button class="btn" style="width:100%" data-close="1">とじる</button>`,
+    close=>{ const sh=$('#sheet');
+      sh.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>{ setColor(kind, b.dataset.c); close(); });
+      sh.querySelector('[data-close]').onclick=()=>close();
+      $('#colPick').onchange=e=>{ const c=e.target.value.toLowerCase(); const key=kind==='pen'?'penMine':'mkMine'; S[key]=[c, ...(S[key]||[]).filter(x=>x!==c)].slice(0,8); setColor(kind,c); close(); };
+    });
+}
+$('#btnUndo').onclick=doUndo; $('#btnRedo').onclick=doRedo;
+window.addEventListener('keydown', e=>{ if((e.metaKey||e.ctrlKey) && e.key.toLowerCase()==='z'){ e.preventDefault(); e.shiftKey?doRedo():doUndo(); } });
+
+/* ================= red sheet ================= */
+function placeRed(){
+  const rs=$('#redsheet'), g=$('#redgrip'); const max=window.innerHeight-60;
+  state.redTop=Math.max(60, Math.min(state.redTop||window.innerHeight*.45, max));
+  rs.style.top=state.redTop+'px'; rs.style.height=(window.innerHeight-state.redTop)+'px'; g.style.top=state.redTop+'px';
+}
+function setRed(on){ state.red=on; $('#redsheet').classList.toggle('hidden',!on); $('#redgrip').classList.toggle('hidden',!on); $('#btnRed').classList.toggle('on',on); if(on){ placeRed(); toast('赤・オレンジの字が隠れます。上のつまみで動かせます', 2600);} }
+$('#btnRed').onclick=()=>setRed(!state.red);
+(()=>{ const g=$('#redgrip'); let sy=null, st=0;
+  g.addEventListener('pointerdown', e=>{ sy=e.clientY; st=state.redTop; g.setPointerCapture(e.pointerId); e.preventDefault(); });
+  g.addEventListener('pointermove', e=>{ if(sy===null) return; state.redTop=st+(e.clientY-sy); placeRed(); });
+  g.addEventListener('pointerup', ()=>{ sy=null; }); g.addEventListener('pointercancel', ()=>{ sy=null; });
+})();
+
+/* ================= masks all ================= */
+function renderMaskBtn(){ $('#btnMaskAll').textContent = state.revealAll ? '👀' : '🙈'; }
+$('#btnMaskAll').onclick=()=>{
+  if(!state.shared?.masks.length){ toast('穴うめは ⬛穴うめ で作れます'); return; }
+  state.revealAll=!state.revealAll; state.revealed.clear(); state.pages.forEach(renderOverlay); renderMaskBtn();
+  toast(state.revealAll?'穴うめを全部見せました':'穴うめを全部かくしました', 1400);
+};
+
+/* ================= sheet / dialogs ================= */
+function openSheet(html, bind){
+  $('#sheet').innerHTML=html; $('#veil').classList.remove('hidden');
+  return new Promise(res=>{ const close=v=>{ $('#veil').classList.add('hidden'); res(v); }; bind?.(close); $('#veil').onclick=e=>{ if(e.target.id==='veil') close(null); }; });
+}
+function confirmDlg(title, msg, ok='OK', danger=false){
+  return openSheet(`<h3>${esc(title)}</h3><p>${esc(msg)}</p><div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn ${danger?'red':''}" data-a="1">${esc(ok)}</button></div>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a==='1')));
+}
+function promptDlg(title, val='', type='text'){
+  return openSheet(`<h3>${esc(title)}</h3><input class="txt" id="pIn" type="${type}" value="${esc(val)}" ${type==='number'?'inputmode="numeric"':''}><div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn" data-a="1">決定</button></div>`,
+    close=>{ const i=$('#pIn'); setTimeout(()=>{ i.focus(); i.select?.(); },50); i.onkeydown=e=>{ if(e.key==='Enter') close(i.value); };
+      $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a==='1'?i.value:null)); });
+}
+async function askReason(mark, b){
+  const r = await openSheet(`<h3>どうしてかな？</h3><p class="note" style="margin-bottom:12px">あとで復習するときのヒントになります</p><div class="grid2">${REASONS.map(x=>`<button class="btn sub" data-r="${esc(x)}">${esc(x)}</button>`).join('')}</div><button class="opt" data-r="" style="justify-content:center;margin-top:8px;color:var(--sub)">あとで</button>`,
+    close=>$('#sheet').querySelectorAll('[data-r]').forEach(x=>x.onclick=()=>close(x.dataset.r)));
+  if(r){ mark.r=r; saveLearn(b); }
+}
+
+$('#btnPage').onclick=async()=>{ if(!state.book) return; const v=await promptDlg(`ページへ移動（1〜${state.book.pages}）`, state.curPage+1, 'number'); const n=parseInt(v,10); if(n>0) scrollToPage(n-1); };
+$('#btnZoomIn').onclick=()=>setZoom(state.zoom*1.25);
+$('#btnZoomOut').onclick=()=>setZoom(state.zoom/1.25);
+
+$('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
+  <button class="opt" data-a="finger"><span>指でも書く<br><span class="s">オフ：指はスクロール、Apple Pencilだけで書く</span></span><span class="sw2 ${state.settings.fingerDraw?'on':''}"></span></button>
+  <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
+  <button class="opt" data-a="rotPage"><span>このページを回転<br><span class="s">90°ずつ右に回ります（↶で戻せます）</span></span><span>↻</span></button>
+  <button class="opt" data-a="rotAll"><span>全ページを回転</span><span>🔄</span></button>
+  <button class="opt" data-a="clearPage"><span>このページの書き込みを消す<br><span class="s">丸つけと記録は残ります（↶で戻せます）</span></span><span>🧽</span></button>
+  <button class="opt" data-a="clearAll"><span>全ページの書き込みを消す<br><span class="s">問題集を新品に戻して解き直す</span></span><span>📄</span></button>
+  <button class="opt" data-a="backup"><span>バックアップを保存<br><span class="s">書き込み・丸つけ・記録（PDF本体は含みません）</span></span><span>💾</span></button>
+  <button class="opt" data-a="restore"><span>バックアップから戻す</span><span>📥</span></button>
+  <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>`,
+  close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a))
+).then(a=>menuAction(a));
+
+async function menuAction(a){
+  if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
+  else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
+  else if(a==='rotPage'){ if(state.book) rotatePages([state.curPage]); }
+  else if(a==='rotAll'){ if(state.book) rotatePages(state.pages.map(p=>p.i)); }
+  else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
+  else if(a==='clearAll'){ if(!state.book) return; if(await confirmDlg('全ページの書き込みを消す', 'この問題集の線をすべて消します。丸つけと記録は残ります。↶で戻せます。', '全部消す', true)) clearStrokes([...state.ink.keys()]); }
+  else if(a==='backup') exportBackup();
+  else if(a==='restore') $('#fileJson').click();
+  else if(a==='help') showHelp();
+}
+function clearStrokes(pages){
+  const saved=new Map();
+  const redo=()=>{ for(const p of pages){ const r=getInk(p); saved.set(p, r.items.filter(it=>it.k==='s')); r.items=r.items.filter(it=>it.k!=='s'); saveInk(p); const pg=state.pages[p]; if(pg) drawInk(pg); } };
+  const undo=()=>{ for(const [p,list] of saved){ getInk(p).items.unshift(...list); saveInk(p); const pg=state.pages[p]; if(pg) drawInk(pg); } };
+  redo(); pushUndo({undo,redo}); toast('書き込みを消しました（↶で戻せます）');
+}
+function showHelp(){
+  openSheet(`<h3>使い方</h3><p>
+  ✏️ <b>ペン</b>で解く → ⭕🔺❌ で丸つけ（もう一度タップで取り消し）。<br>
+  🔲 <b>問題わく</b>で1問ずつ囲んでおくと、間違えた問題だけを🔁<b>復習</b>で出し直せます。囲まずに丸をつけた場合は、ページごと復習に出ます。<br>
+  ❌🔺の問題は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。<br>
+  🟥 <b>赤シート</b>：「赤シート用」オレンジで書いた字や、赤い字が隠れます。<br>
+  ⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋見る でタップすると開きます。<br>
+  📝 <b>メモ</b>：計算用紙を出します。ページごとに保存されます。<br>
+  🤏 2本指で <b>拡大・縮小</b>。⋯ → <b>回転</b> でページの向きを変えられます。<br>
+  🪙 <b>コイン</b>：丸つけや勉強時間でたまり、🎁ごほうびと交換できます（おうちの人のパスコードが必要）。<br>
+  📄 ⋯ → 全ページの書き込みを消す で、何度でも新品から解き直せます。</p>
+  <button class="btn" style="width:100%" data-a="1">OK</button>`, close=>$('#sheet').querySelector('[data-a]').onclick=()=>close());
+}
+
+/* ================= backup ================= */
+async function exportBackup(){
+  let dl=null; try{ dl = await window.claude?.use?.('downloads'); }catch{}
+  if(!dl){ toast('この画面ではファイル保存ができません'); return; }
+  const data={}; for(const s of ['books','shared','learn','ink','meta']) data[s]=await store.all(s);
+  const json=JSON.stringify({app:'tokinote', v:1, at:new Date().toISOString(), data});
+  try{ await dl.save({filename:`tokinote-backup-${dateKey()}.json`, data:new Blob([json],{type:'application/json'})}); toast('バックアップを保存しました'); }
+  catch(e){ toast(e?.code==='declined' ? '保存をやめました' : 'バックアップを保存できませんでした'); }
+}
+$('#fileJson').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    const j=JSON.parse(await f.text()); if(j.app!=='tokinote') throw 0;
+    let n=0;
+    for(const [k,v] of j.data.books||[]){ if(!(await store.get('books',k))){ await store.put('books',k,v); n++; } }
+    for(const [k,v] of j.data.shared||[]){ const l=await store.get('shared',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('shared',k,v); n++; } }
+    for(const [k,v] of j.data.learn||[]){ const l=await store.get('learn',k); const m=mergeLearn(l,v); await store.put('learn',k,m); n++; }
+    for(const [k,v] of j.data.ink||[]){ const l=await store.get('ink',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('ink',k,v); n++; } }
+    for(const [k,v] of j.data.meta||[]){ if(String(k).startsWith('stats|')){ const l=await store.get('meta',k); await store.put('meta',k,mergeStats(l,v)); } }
+    await loadAllForLearner(); refreshDue(); renderStats();
+    if(state.book) await openBook(state.book.id); else renderLib();
+    toast(`バックアップから戻しました（${n}件）`);
+  }catch{ toast('このファイルは読み込めませんでした'); }
+};
+
+/* ================= library ================= */
+function showScreen(s){
+  state.screen=s;
+  $('#lib').classList.toggle('hidden', s!=='lib');
+  $('#review').classList.toggle('hidden', !(s==='review'||s==='solve'));
+  $('#app').classList.toggle('hidden', s!=='main');
+  $('#rewardScr').classList.toggle('hidden', s!=='reward');
+  if(s!=='main') setRed(false);
+  applyTouchMode(); updUndo();
+}
+function renderLearners(){
+  $('#learners').innerHTML = state.learners.map(l=>`<button class="chip ${l.id===state.learner?'on':''}" data-l="${l.id}">${esc(l.name)}</button>`).join('') + `<button class="chip" data-edit="1">✎ 名前</button>`;
+}
+$('#learners').onclick=async e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.l && b.dataset.l!==state.learner){ state.learner=b.dataset.l; saveMeta(); undoMain.length=0; redoMain.length=0; await loadAllForLearner(); renderLearners(); renderLib(); refreshDue(); renderStats(); syncLearnerFromCloud(); }
+  else if(b.dataset.edit){ const me=state.learners.find(l=>l.id===state.learner); const v=await promptDlg('名前を変える', me.name); if(v && v.trim()){ me.name=v.trim().slice(0,12); saveMeta(); Cloud.put('cfg',{kind:'cfg', list:state.learners, updated:Date.now()}); renderLearners(); } }
+};
+async function renderLib(){
+  renderLearners(); renderStats();
+  const books=(await store.all('books')).map(([,v])=>v).sort((a,b)=>(b.lastOpened||0)-(a.lastOpened||0));
+  const files=new Set((await store.all('files').catch(()=>[])).map(([k])=>k));
+  const items=reviewItems();
+  const dueBy=b=>items.filter(i=>i.b===b && i.isDue).length;
+  let h='';
+  for(const bk of books){
+    const has=files.has(bk.id); const d=dueBy(bk.id); const l=state.learnAll.get(bk.id);
+    h+=`<div class="card ${has?'':'ghost'}"><div style="font-size:30px">📘</div><div class="grow"><div class="t">${esc(bk.name)}${d?`<span class="tag">復習 ${d}</span>`:''}</div>
+      <div class="m">${bk.pages}ページ${l?.lastPage?` ・ 前回 ${l.lastPage+1}ページ`:''}${has?'':' ・ PDFをもう一度入れると開けます'}</div></div>
+      ${has?`<button class="btn" data-open="${bk.id}">開く</button>`:''}<button class="btn sub" data-rm="${bk.id}">⋯</button></div>`;
+  }
+  for(const [b,sh] of state.sharedAll){
+    if(books.some(x=>x.id===b) || !sh.name) continue;
+    h+=`<div class="card ghost"><div style="font-size:30px">☁️</div><div class="grow"><div class="t">${esc(sh.name)}</div><div class="m">クラウドに書き込みがあります。同じPDFを入れると戻ります</div></div></div>`;
+  }
+  $('#bookList').innerHTML = h || `<p class="note">まだ問題集がありません。「＋ 問題集のPDFを入れる」から追加してください。</p>`;
+  $('#saveNote').innerHTML = (Cloud.db ? '書き込み・丸つけ・記録は、この端末と<b>クラウド（ログイン中のアカウント）</b>に自動保存されます。' : '書き込み・丸つけ・記録は<b>この端末</b>に保存されます。')
+    + ' PDF本体はこの端末だけに保存されます。消えた場合も、同じPDFを入れ直せば書き込みが戻ります。念のため、ときどき ⋯ メニューの「バックアップを保存」をしてください。';
+  refreshDue();
+}
+$('#bookList').onclick=async e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.open) openBook(b.dataset.open);
+  else if(b.dataset.rm){
+    const bk=await store.get('books', b.dataset.rm);
+    const ok=await confirmDlg('本棚から外す', `「${bk?.name}」のPDFをこの端末から外します。書き込みと記録は残り、同じPDFを入れ直すと戻ります。`, '外す', true);
+    if(ok){ await store.del('files', b.dataset.rm); await store.del('books', b.dataset.rm); if(state.book?.id===b.dataset.rm){ state.book=null; } renderLib(); }
+  }
+};
+$('#btnAdd').onclick=()=>$('#filePdf').click();
+$('#btnLib').onclick=()=>{ showScreen('lib'); renderLib(); };
+$('#btnLibReview').onclick=()=>openReview();
+$('#btnLibReward').onclick=()=>openReward();
+$('#btnReview').onclick=()=>openReview();
+
+async function sha(buf){ const h=await crypto.subtle.digest('SHA-256', buf); return [...new Uint8Array(h)].slice(0,10).map(x=>x.toString(16).padStart(2,'0')).join(''); }
+$('#filePdf').onchange=async e=>{
+  const files=[...e.target.files]; e.target.value=''; let last=null;
+  for(const f of files){
+    try{
+      toast(`「${f.name}」を読み込み中…`, 8000);
+      const buf=await f.arrayBuffer(); const id=await sha(buf);
+      const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf.slice(0)), ...PDF_OPTS}).promise;
+      const aspects=[]; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const vp=pg.getViewport({scale:1}); aspects.push(vp.height/vp.width); }
+      const name=f.name.replace(/\.pdf$/i,'');
+      const exist=await store.get('books', id);
+      await store.put('files', id, buf);
+      await store.put('books', id, {...(exist||{}), id, name: exist?.name || name, pages:pdf.numPages, aspects, added: exist?.added || Date.now(), lastOpened:Date.now()});
+      pdf.destroy();
+      const sh=getShared(id); if(!sh.name){ sh.name=name; sh.pages=aspects.length; saveShared(id); }
+      last=id;
+    }catch(err){ console.warn(err); toast(`「${f.name}」は開けませんでした（パスワード付きや壊れたPDFの可能性）`, 5000); }
+  }
+  if(last){ toast('追加しました', 1200); if(files.length===1) openBook(last); else renderLib(); }
+};
+
+/* ================= open book ================= */
+async function openBook(id){
+  const meta=await store.get('books', id); const file=await store.get('files', id);
+  if(!meta || !file){ toast('PDFが見つかりません。もう一度入れてください'); return; }
+  showScreen('main'); $('#pages').innerHTML='<div class="loading">ひらいています…</div>';
+  $('#bookTitle').textContent=meta.name;
+  try{
+    if(state.pdf && state.pdfId!==id){ try{ state.pdf.destroy(); }catch{} state.pdf=null; }
+    if(!state.pdf) state.pdf = await pdfjsLib.getDocument({data:new Uint8Array(file.slice(0)), ...PDF_OPTS}).promise;
+    state.pdfId=id;
+  }catch(e){ console.warn(e); toast('PDFを開けませんでした'); showScreen('lib'); return; }
+  meta.lastOpened=Date.now(); store.put('books', id, meta).catch(()=>{});
+  state.book=meta; state.shared=getShared(id); state.revealed.clear(); state.revealAll=false; renderMaskBtn();
+  undoMain.length=0; redoMain.length=0; updUndo();
+  const rows=await store.range('ink', `${state.learner}|${id}|`);
+  state.ink=new Map(rows.map(([k,v])=>[+k.split('|')[2], v]));
+  buildPages(); renderTools();
+  state.curPage=getLearn(id).lastPage||0; renderPageBtn();
+  requestAnimationFrame(()=>scrollToPage(state.curPage));
+  refreshDue(); renderStats();
+  if(state.memoOpen) showMemoFor(state.curPage);
+  syncBookFromCloud(id);
+}
+
+/* ================= review ================= */
+const rv={queue:[], idx:0, items:[], tool:'pen', W:0, cropH:0, done:{o:0,t:0,x:0}};
+const pdfCache=new Map();
+async function getPdfFor(b){
+  if(state.pdfId===b && state.pdf) return state.pdf;
+  if(pdfCache.has(b)) return pdfCache.get(b);
+  const file=await store.get('files', b); if(!file) return null;
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(file.slice(0)), ...PDF_OPTS}).promise;
+  for(const [k,v] of pdfCache){ try{v.destroy();}catch{} pdfCache.delete(k); }
+  pdfCache.set(b,pdf); return pdf;
+}
+function openReview(){ showScreen('review'); renderReviewList(); }
+function renderReviewList(){
+  state.screen='review'; $('#rvTools').classList.add('hidden'); $('#rvGrade').classList.add('hidden');
+  const items=reviewItems(); const due=items.filter(i=>i.isDue).sort((a,b)=>a.s.due-b.s.due);
+  const up=items.filter(i=>i.s.st==='review' && !i.isDue).sort((a,b)=>a.s.due-b.s.due);
+  const grad=items.filter(i=>i.s.st==='grad').length;
+  const me=state.learners.find(l=>l.id===state.learner)?.name||'';
+  $('#rvTitle').textContent=`🔁 ${me} の復習`;
+  const label=i=> i.prob ? `問${i.prob.n}（${i.page+1}ページ）` : `${i.page+1}ページ`;
+  const row=(i,extra)=>`<div class="card"><div style="font-size:26px">${i.s.last?.m==='o'?'🔁':i.s.last?.m==='t'?'🔺':'❌'}</div><div class="grow"><div class="t">${esc(i.book)} ・ ${label(i)}</div>
+     <div class="m">${extra}${i.s.last?.r?` ・ ${esc(i.s.last.r)}`:''} ・ 卒業まであと${i.s.left}回</div></div></div>`;
+  let h=`<div class="wrap">`;
+  if(due.length) h+=`<button class="big" id="rvStart">▶ 今日の復習をはじめる（${due.length}問）</button>`;
+  else h+=`<div class="card"><div style="font-size:30px">🎉</div><div class="grow"><div class="t">今日の復習はありません</div><div class="m">間違えた問題は、ここに自動で集まります</div></div></div>`;
+  h+=`<div class="row" style="margin:8px 0"><span class="tag blue">🏆 卒業 ${grad}問</span><span class="tag">待っている ${up.length}問</span></div>`;
+  if(due.length){ h+=`<h2>今日の問題</h2>`+due.map(i=>row(i,'今日')).join(''); }
+  if(up.length){ h+=`<h2>これから出る問題</h2>`+up.slice(0,40).map(i=>row(i, `${Math.max(1,Math.ceil((i.s.due-endOfDay())/DAY)+1)}日後`)).join(''); }
+  h+=`<p class="note">❌🔺の問題は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。続けて⭕なら卒業です。</p></div>`;
+  $('#rvBody').innerHTML=h;
+  const s=$('#rvStart'); if(s) s.onclick=()=>{ rv.queue=due; rv.idx=0; rv.done={o:0,t:0,x:0}; showSolve(); };
+}
+$('#rvBack').onclick=()=>{
+  if(state.screen==='solve'){ renderReviewList(); return; }
+  if(state.book){ showScreen('main'); refreshDue(); state.pages.forEach(renderOverlay); } else { showScreen('lib'); renderLib(); }
+};
+async function showSolve(){
+  state.screen='solve'; applyTouchMode(); undoRv.length=0; redoRv.length=0;
+  const it=rv.queue[rv.idx];
+  if(!it){ return finishReview(); }
+  $('#rvTools').classList.remove('hidden'); $('#rvGrade').classList.remove('hidden');
+  $('#rvTitle').textContent=`復習 ${rv.idx+1} / ${rv.queue.length}`;
+  const label= it.prob ? `問${it.prob.n}（${it.page+1}ページ）` : `${it.page+1}ページ`;
+  $('#rvBody').innerHTML=`<div class="rvinfo">${esc(it.book)} ・ ${label}${it.s.last?.r?` ・ 前回：${esc(it.s.last.r)}`:''}</div><div id="rvStage"><div class="loading">読み込み中…</div></div>`;
+  const pdf=await getPdfFor(it.b).catch(()=>null);
+  const stage=$('#rvStage');
+  if(!pdf){ stage.innerHTML=`<div class="loading">この問題集のPDFがこの端末にありません。本棚から同じPDFを入れ直してください。</div>`; return; }
+  const page=await pdf.getPage(it.page+1); const vp1=page.getViewport({scale:1});
+  const asp=vp1.height/vp1.width; const extraRot=(state.sharedAll.get(it.b)?.rot?.[it.page])||0; const g=geomOf(asp, extraRot);
+  const rB = it.prob ? {x:it.prob.x, y:it.prob.y, w:it.prob.w, h:it.prob.h} : {x:0, y:0, w:10000, h:10000*asp};
+  const r = rectMap(toD, g, rB);
+  const W=Math.min($('#rvBody').clientWidth-24, 900); const cropH=Math.round(W*r.h/r.w); const extra=Math.max(320, Math.round(cropH*.8));
+  rv.W=W; rv.cropH=cropH; rv.items=[];
+  stage.innerHTML=''; stage.style.width=W+'px'; stage.style.height=(cropH+extra)+'px';
+  const ratio=pixelRatioFor(W, cropH+extra);
+  const crop=document.createElement('canvas'); crop.width=Math.floor(W*ratio); crop.height=Math.floor(cropH*ratio); crop.style.width=W+'px'; crop.style.height=cropH+'px';
+  const calc=document.createElement('div'); calc.className='calc'; calc.style.top=cropH+'px'; calc.textContent='ここに計算や答えを書こう';
+  const ink=document.createElement('canvas'); ink.width=Math.floor(W*ratio); ink.height=Math.floor((cropH+extra)*ratio); ink.style.width=W+'px'; ink.style.height=(cropH+extra)+'px';
+  stage.append(crop, calc, ink); rv.ink=ink;
+  const ptsPerU=vp1.width/10000, scale=crop.width/(r.w*ptsPerU), rotation=((page.rotate||0)+g.rot)%360;
+  const vp=page.getViewport({scale, rotation, offsetX:-r.x*ptsPerU*scale, offsetY:-r.y*ptsPerU*scale});
+  const ctx=crop.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,crop.width,crop.height);
+  try{ await page.render({canvasContext:ctx, viewport:vp}).promise; }catch(e){ console.warn(e); }
+  $('#rvBody').scrollTop=0;
+}
+const rvTarget = {
+  getW:()=>rv.W, tool:()=>rv.tool==='eraser'?'eraser':'pen', canDraw:()=>!!rv.ink, scroller:()=>$('#rvBody'),
+  items:()=>rv.items, inkCanvas:()=>rv.ink, ovEl:()=>null, forceColor:null,
+  inkRedraw:()=>drawAll(rv.ink, rv.items),
+  addStroke(item){ rv.items.push(item); drawItem(rv.ink.getContext('2d'), item, rv.ink.width/10000);
+    pushUndo({undo:()=>{ const j=rv.items.indexOf(item); if(j>=0) rv.items.splice(j,1); drawAll(rv.ink,rv.items); }, redo:()=>{ rv.items.push(item); drawAll(rv.ink,rv.items); }}, 'rv'); },
+  commitErase(list){ pushUndo({undo:()=>{ rv.items.push(...list); drawAll(rv.ink,rv.items); }, redo:()=>{ rv.items=rv.items.filter(x=>!list.includes(x)); drawAll(rv.ink,rv.items); }}, 'rv'); }
+};
+// 復習ステージは動的に作り直すので、親で委譲して受ける
+(()=>{ const body=$('#rvBody'); const T=rvTarget;
+  const inStage = e => e.target.closest?.('#rvStage') && state.screen==='solve';
+  body.addEventListener('pointerdown', e=>{ if(inStage(e)) onDown(e, $('#rvStage'), T); });
+  guardStylus(body);
+})();
+function setRvTool(t){ rv.tool=t; $('#rvPen').classList.toggle('on',t==='pen'); $('#rvEraser').classList.toggle('on',t==='eraser'); }
+$('#rvPen').onclick=()=>setRvTool('pen'); $('#rvEraser').onclick=()=>setRvTool('eraser');
+$('#rvUndo').onclick=doUndo;
+$('#rvClear').onclick=()=>{ if(!rv.ink) return; const list=rv.items.slice(); rv.items.length=0; drawAll(rv.ink,rv.items); pushUndo({undo:()=>{ rv.items.push(...list); drawAll(rv.ink,rv.items); }, redo:()=>{ rv.items.length=0; drawAll(rv.ink,rv.items); }},'rv'); };
+$('#rvGrade').addEventListener('click', async e=>{
+  const b=e.target.closest('.gb'); if(!b || state.screen!=='solve') return;
+  const m=b.dataset.m; const it=rv.queue[rv.idx];
+  if(m!=='skip' && it){
+    const learn=getLearn(it.b); const mark={m, d:Date.now(), rv:1};
+    (learn.marks[it.pid] ||= []).push(mark); bumpStat(mark.d, m, +1); saveLearn(it.b); rv.done[m]++;
+    const r=b.getBoundingClientRect(); celebrate(m, r.left+r.width/2, r.top);
+    if(m!=='o') await askReason(mark, it.b); else await new Promise(res=>setTimeout(res, 650));
+  }
+  rv.idx++; rv.ink=null; showSolve();
+});
+function finishReview(){
+  state.screen='review'; $('#rvGrade').classList.add('hidden'); $('#rvTools').classList.add('hidden');
+  $('#rvTitle').textContent='おつかれさま！';
+  $('#rvBody').innerHTML=`<div class="wrap" style="text-align:center"><div style="font-size:72px;margin-top:30px">🎉</div><h1>復習おわり！</h1>
+    <p style="font-size:22px;font-weight:700">⭕ ${rv.done.o}　🔺 ${rv.done.t}　❌ ${rv.done.x}</p>
+    <p class="note">⭕の問題は、次は少し日をあけて出てきます。</p><button class="big" id="rvAgain">復習リストへ</button></div>`;
+  if(rv.done.o) { sfx('o'); confetti(window.innerWidth/2, window.innerHeight/3); }
+  $('#rvAgain').onclick=renderReviewList;
+}
+
+/* ================= memo（📝で出す、動かせる・大きさを変えられる計算用紙） ================= */
+const memoCv=$('#memoStage canvas'); const MEMO_W=1000, MEMO_H=2000; let memoW=MEMO_W, memoPage=0;
+function memoItems(p=memoPage){ const r=getInk(p); return (r.memo ||= []); }
+function sizeMemo(){
+  const st=$('#memoStage'); st.style.width=MEMO_W+'px'; st.style.height=MEMO_H+'px';
+  if(!memoCv.dataset.sized){ memoCv.dataset.sized='1'; const r=pixelRatioFor(MEMO_W,MEMO_H); memoCv.width=Math.floor(MEMO_W*r); memoCv.height=Math.floor(MEMO_H*r); memoCv.style.width=MEMO_W+'px'; memoCv.style.height=MEMO_H+'px'; }
+  drawMemo();
+}
+function drawMemo(){ if(state.memoOpen && memoCv.width && state.book) drawAll(memoCv, memoItems()); }
+function showMemoFor(p){ memoPage=p; $('#memoTitle').textContent=`📝 メモ（${p+1}ページ）`; drawMemo(); }
+function memoBox(){
+  const A=$('#mainArea').getBoundingClientRect(); let b=state.settings.memoBox;
+  if(!b){ const w=Math.min(460, A.width*.55), h=Math.min(560, A.height*.55); b={x:A.width-w-12, y:Math.max(8, A.height-h-150), w, h}; }
+  const w=Math.max(220, Math.min(b.w, A.width-8)), h=Math.max(170, Math.min(b.h, A.height-8));
+  const x=Math.max(4-w+120, Math.min(b.x, A.width-120)), y=Math.max(0, Math.min(b.y, A.height-48));   // 少しはみ出してもOK、つかむ所は残す
+  return {x,y,w,h};
+}
+function placeMemo(b=memoBox()){ const m=$('#memo'); m.style.left=b.x+'px'; m.style.top=b.y+'px'; m.style.width=b.w+'px'; m.style.height=b.h+'px'; }
+function setMemo(open){
+  state.memoOpen=open; $('#memo').classList.toggle('hidden',!open); $('#btnMemo').classList.toggle('on',open);
+  if(open){ placeMemo(); sizeMemo(); showMemoFor(state.curPage); }
+}
+$('#btnMemo').onclick=()=>setMemo(!state.memoOpen);
+$('#memoClose').onclick=()=>setMemo(false);
+$('#memoClear').onclick=()=>{
+  const p=memoPage, list=memoItems(p).slice(); if(!list.length) return;
+  const apply=v=>{ getInk(p).memo=v; saveInk(p); if(memoPage===p) drawMemo(); };
+  apply([]); pushUndo({undo:()=>apply(list.slice()), redo:()=>apply([])}); toast('メモを消しました（↶で戻せます）',1600);
+};
+// 見出しをつかんで移動、右下の ⇲ で大きさを変える
+function dragHandle(el, onMove){
+  let st=null;
+  el.addEventListener('pointerdown', e=>{
+    if(e.target.closest('button')) return;
+    e.preventDefault(); e.stopPropagation(); try{ el.setPointerCapture(e.pointerId); }catch{}
+    st={id:e.pointerId, x:e.clientX, y:e.clientY, b:memoBox()};
+  });
+  el.addEventListener('pointermove', e=>{ if(!st||e.pointerId!==st.id) return; e.preventDefault(); placeMemo(onMove(st.b, e.clientX-st.x, e.clientY-st.y)); });
+  const end=e=>{ if(!st||e.pointerId!==st.id) return; const b=onMove(st.b, e.clientX-st.x, e.clientY-st.y); st=null; state.settings.memoBox=b; saveMeta(); placeMemo(); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+dragHandle($('#memo .mhead'), (b,dx,dy)=>({...b, x:b.x+dx, y:b.y+dy}));
+dragHandle($('#memoResize'), (b,dx,dy)=>({...b, w:Math.max(220,b.w+dx), h:Math.max(170,b.h+dy)}));
+const memoT={
+  getW:()=>memoW, tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
+  canDraw:()=>state.memoOpen && !!state.book, scroller:()=>$('#memoBody'),
+  items:()=>memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
+  addStroke(item){ const p=memoPage; memoItems(p).push(item); drawItem(memoCv.getContext('2d'), item, memoCv.width/10000); saveInk(p);
+    pushUndo({undo:()=>{ const a=memoItems(p); const j=a.indexOf(item); if(j>=0) a.splice(j,1); saveInk(p); if(memoPage===p) drawMemo(); },
+              redo:()=>{ memoItems(p).push(item); saveInk(p); if(memoPage===p) drawMemo(); }}); },
+  commitErase(list){ const p=memoPage; saveInk(p);
+    pushUndo({undo:()=>{ memoItems(p).push(...list); saveInk(p); if(memoPage===p) drawMemo(); },
+              redo:()=>{ const r=getInk(p); r.memo=(r.memo||[]).filter(x=>!list.includes(x)); saveInk(p); if(memoPage===p) drawMemo(); }}); }
+};
+attachInput($('#memoStage'), memoT); guardStylus($('#memoBody'));
+
+/* ================= ツールをかくす ================= */
+function renderToolsMin(){
+  const hid=!!state.settings.toolsHidden; $('#tools').classList.toggle('min', hid);
+  const t=TOOLS.find(x=>x[0]===state.tool)||TOOLS[1]; $('#toolsMini').innerHTML=`${t[1]}<small>▴ 出す</small>`;
+}
+$('#btnToolsHide').onclick=()=>{ state.settings.toolsHidden=true; saveMeta(); renderToolsMin(); };
+$('#toolsMini').onclick=()=>{ state.settings.toolsHidden=false; saveMeta(); renderToolsMin(); };
+
+/* ================= rewards（コイン・ごほうび・シール） ================= */
+const COIN={o:10, t:5, x:2, rvo:15, grad:30};
+const STICKERS=Array.from('🐶🐱🐰🦊🐻🐼🐨🐯🦁🐮🐷🐸🐵🐧🐤🦄🐝🦋🐢🐬🐳🦖🐙🦀🍓🍉🍩🍰🌈⭐🌙🌸🌻🍀🎈🎨🎵🚀👑💎');
+const DEFAULT_REWARDS=[{id:'r1',name:'ゲーム・動画 15分',cost:100},{id:'r2',name:'好きなおやつ',cost:150},{id:'r3',name:'好きな本・まんが',cost:600}];
+function coinTotals(){
+  let earned=0;
+  for(const l of state.learnAll.values()) for(const marks of Object.values(l.marks||{})){
+    const best=new Map();
+    for(const m of marks){ const k=dateKey(m.d); const v = m.m==='o' ? (m.rv?COIN.rvo:COIN.o) : m.m==='t' ? COIN.t : COIN.x; best.set(k, Math.max(best.get(k)||0, v)); }
+    for(const v of best.values()) earned+=v;
+    if(marks.length && srsOf(marks).st==='grad') earned+=COIN.grad;
+  }
+  for(const d of Object.values(state.stats.days||{})) earned += Math.min(6, Math.floor((d.sec||0)/600))*10;
+  const spent=(state.rewards?.spent||[]).reduce((a,x)=>a+(x.cost||0),0);
+  return {earned, spent, now:Math.max(0, earned-spent)};
+}
+function floatText(t,x,y){
+  const d=document.createElement('div'); d.className='bigstamp'; d.style.cssText=`left:${x}px;top:${y}px;font-size:26px;color:#b8860b;font-weight:900`; d.textContent=t;
+  document.body.appendChild(d);
+  d.animate([{transform:'translate(-50%,-50%)',opacity:1},{transform:'translate(-50%,-180%)',opacity:0}],{duration:1200,easing:'ease-out'}).onfinish=()=>d.remove();
+}
+let lastCoins=null, lastEarned=null;
+function updateCoins(x,y){
+  const c=coinTotals();
+  if(x!=null && lastCoins!=null && c.now>lastCoins) floatText(`+${c.now-lastCoins} 🪙`, x, y-40);
+  if(lastEarned!=null && Math.floor(c.earned/100)>Math.floor(lastEarned/100)){
+    const n=Math.floor(c.earned/100); setTimeout(()=>toast(`🎉 新しいシール ${STICKERS[(n-1)%STICKERS.length]} をゲット！`, 3500), 700);
+  }
+  lastCoins=c.now; lastEarned=c.earned;
+  $('#coinNum').textContent=c.now; const lc=$('#libCoin'); if(lc) lc.textContent=c.now;
+}
+function saveRewards(){
+  const L=state.learner, r=state.rewards; r.updated=Date.now();
+  store.put('meta','rewards|'+L, r).catch(()=>{}); Cloud.put(`rw_${L}`, {...r, kind:'rewards'});
+}
+function mergeRewards(a,b){
+  if(!a) return clone(b); if(!b) return a;
+  const sp=new Map(); for(const x of [...(a.spent||[]),...(b.spent||[])]) sp.set(x.id,x);
+  const newer=(b.updated||0)>(a.updated||0)?b:a;
+  return {list:clone(newer.list||DEFAULT_REWARDS), spent:[...sp.values()].sort((x,y)=>x.d-y.d), updated:Math.max(a.updated||0,b.updated||0)};
+}
+async function askPin(msg){
+  if(!state.settings.pin){
+    const v=await promptDlg('おうちの人用のパスコード（4けた）を決めてください','', 'number');
+    if(!v || !/^\d{4}$/.test(v)){ if(v!==null) toast('4けたの数字にしてください'); return false; }
+    state.settings.pin=v; saveMeta(); toast('パスコードを決めました'); return true;
+  }
+  const v=await promptDlg(msg,'','number'); if(v===null) return false;
+  if(v===state.settings.pin) return true; toast('パスコードがちがいます'); return false;
+}
+function openReward(){ showScreen('reward'); renderReward(); }
+function renderReward(){
+  const c=coinTotals(); const me=state.learners.find(l=>l.id===state.learner)?.name||'';
+  const nGot=Math.floor(c.earned/100), total=STICKERS.length, toNext=100-(c.earned%100);
+  const list=state.rewards.list||[];
+  let h=`<div class="row"><button class="pill" id="rwBack">← もどる</button></div>
+  <h1>🎁 ${esc(me)} のごほうび</h1>
+  <div class="card"><div style="font-size:44px">🪙</div><div class="grow"><div class="t" style="font-size:30px">${c.now} コイン</div>
+    <div class="m">これまでにもらった ${c.earned} ・ つかった ${c.spent}</div></div></div>
+  <h2>ごほうびと交換する</h2>`;
+  h+= list.length ? list.map(r=>`<div class="card"><div style="font-size:28px">🎁</div><div class="grow"><div class="t">${esc(r.name)}</div><div class="m">🪙 ${r.cost}${c.now<r.cost?` ・ あと ${r.cost-c.now}`:''}</div></div>
+    <button class="btn" data-ex="${r.id}" ${c.now<r.cost?'disabled style="opacity:.35"':''}>交換</button></div>`).join('') : `<p class="note">ごほうびがまだありません。</p>`;
+  h+=`<button class="big sub" id="rwEdit">🔒 おうちの人：ごほうびを決める</button>
+  <h2>シール図鑑（${Math.min(nGot,total)} / ${total}）</h2>
+  <p class="note">100コインもらうごとに、シールが1まいふえます。つぎのシールまで あと ${toNext} コイン。</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px;background:#fff;border-radius:14px;padding:12px;margin:10px 0">
+  ${STICKERS.map((s,i)=>`<div style="font-size:34px;text-align:center;${i<nGot?'':'opacity:.18;filter:grayscale(1)'}">${i<nGot?s:'❔'}</div>`).join('')}</div>
+  <h2>コインのもらい方</h2>
+  <p class="note">⭕ 10 ・ 🔺 5 ・ ❌ 2（同じ問題は1日1回まで）<br>🔁 復習で⭕ 15 ・ 🏆 卒業 30<br>⏱ 10分勉強するごとに 10（1日60まで）</p>`;
+  const sp=(state.rewards.spent||[]).slice(-15).reverse();
+  if(sp.length) h+=`<h2>交換したもの</h2>`+sp.map(x=>`<div class="card"><div class="grow"><div class="t">${esc(x.name)}</div><div class="m">${new Date(x.d).toLocaleDateString('ja-JP')} ・ 🪙 ${x.cost}</div></div></div>`).join('');
+  $('#rwBody').innerHTML=h;
+  $('#rwBack').onclick=()=>{ if(state.book){ showScreen('main'); } else { showScreen('lib'); renderLib(); } };
+  $('#rwEdit').onclick=editRewards;
+  $('#rwBody').querySelectorAll('[data-ex]').forEach(b=>b.onclick=async()=>{
+    const r=list.find(x=>x.id===b.dataset.ex); if(!r) return;
+    if(coinTotals().now<r.cost) return;
+    if(!(await askPin(`「${r.name}」と交換します。おうちの人がパスコードを入れてね`))) return;
+    state.rewards.spent.push({id:uid('x'), name:r.name, cost:r.cost, d:Date.now()}); saveRewards();
+    sfx('o'); confetti(window.innerWidth/2, window.innerHeight/3); updateCoins(); renderReward();
+    toast(`🎁「${r.name}」と交換しました！`, 3000);
+  });
+}
+async function editRewards(){
+  if(!(await askPin('おうちの人のパスコードを入れてください'))) return;
+  const rows=()=>state.rewards.list.map((r,i)=>`<div class="row" style="margin-bottom:8px"><input class="txt" style="flex:1;margin:0" data-n="${i}" value="${esc(r.name)}"><input class="txt" style="width:90px;margin:0" type="number" inputmode="numeric" data-c="${i}" value="${r.cost}"><button class="btn red" data-del="${i}">×</button></div>`).join('');
+  const html=()=>`<h3>🔒 ごほうびを決める</h3><div id="rwRows">${rows()}</div>
+    <button class="btn sub" id="rwAdd" style="width:100%;margin-bottom:12px">＋ ごほうびを追加</button>
+    <div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn" data-a="1">保存</button></div>`;
+  const draft=clone(state.rewards.list);
+  const ok=await openSheet(html(), close=>{
+    const sh=$('#sheet');
+    const read=()=>{ sh.querySelectorAll('[data-n]').forEach(i=>{ draft[+i.dataset.n].name=i.value; }); sh.querySelectorAll('[data-c]').forEach(i=>{ draft[+i.dataset.c].cost=Math.max(1, parseInt(i.value,10)||1); }); };
+    const bind=()=>{
+      sh.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{ read(); draft.splice(+b.dataset.del,1); state.rewards.list=draft; $('#rwRows').innerHTML=rows(); bind(); });
+    };
+    state.rewards.list=draft; bind();
+    $('#rwAdd').onclick=()=>{ read(); draft.push({id:uid('r'), name:'', cost:100}); $('#rwRows').innerHTML=rows(); bind(); };
+    sh.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>{ if(b.dataset.a==='1') read(); close(b.dataset.a==='1'); });
+  });
+  if(ok){ state.rewards.list=draft.filter(r=>r.name.trim()).map(r=>({...r, name:r.name.trim().slice(0,30)})); saveRewards(); toast('ごほうびを保存しました'); }
+  else { const saved=await store.get('meta','rewards|'+state.learner); state.rewards.list = saved?.list || clone(DEFAULT_REWARDS); }
+  renderReward();
+}
+$('#btnCoin').onclick=openReward;
+
+/* ================= boot ================= */
+guardStylus($('#pages'));
+async function boot(){
+  await initStore();
+  const s=await store.get('meta','settings'); if(s) Object.assign(state.settings, s);
+  const L=await store.get('meta','learners'); if(L?.list?.length){ state.learners=L.list; state.learner=L.cur||L.list[0].id; }
+  const z=await store.get('meta','zoom'); if(z) state.zoom=z;
+  const t=await store.get('meta','tool'); if(t && TOOLS.some(x=>x[0]===t)) state.tool=t;
+  await loadAllForLearner();
+  renderCloud(); renderTools(); renderMaskBtn(); showScreen('lib'); await renderLib();
+  await Cloud.init();
+  if(Cloud.db){ await syncCfgFromCloud(); await syncLearnerFromCloud(); renderLib(); }
+}
+boot();
+</script>
+</body>
+</html>
