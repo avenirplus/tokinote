@@ -3,6 +3,8 @@
   "name": "tokinote",
   "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
+  "workers_dev": true,        // https://tokinote.<アカウント>.workers.dev で開く
+  "preview_urls": false,      // 版ごとのプレビューURLは作らない（入口を1つにする）
   "assets": { "directory": "./public", "binding": "ASSETS" },
   "durable_objects": {
     "bindings": [{ "name": "FAMILY", "class_name": "Family" }]
