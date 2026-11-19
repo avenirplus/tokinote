@@ -134,7 +134,7 @@ export class Family extends DurableObject {
       return json(out);
     }
     // PDF本体
-    const pm = path.match(/^\/api\/pdf\/([a-f0-9]{8,64})$/);
+    const pm = path.match(/^\/api\/(?:pdf|blob)\/([a-f0-9]{8,64})$/);   // PDF と、アドバイスの画像
     if (pm) {
       const id = pm[1];
       if (request.method === 'HEAD' || request.method === 'GET') {
@@ -143,7 +143,7 @@ export class Family extends DurableObject {
         if (request.method === 'HEAD') return new Response(null, { headers: { 'content-length': String(m[0].size) } });
         const out = new Uint8Array(m[0].size); let off = 0;
         for (const r of this.sql.exec(`SELECT data FROM blob WHERE id=? ORDER BY idx`, id)) { const d = new Uint8Array(r.data); out.set(d, off); off += d.length; }
-        return new Response(out, { headers: { 'content-type': 'application/pdf', 'cache-control': 'private, max-age=0' } });
+        return new Response(out, { headers: { 'content-type': path.startsWith('/api/blob/') ? 'image/jpeg' : 'application/pdf', 'cache-control': 'private, max-age=0' } });
       }
       if (request.method === 'PUT') {
         const len = +(request.headers.get('content-length') || 0);

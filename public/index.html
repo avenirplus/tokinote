@@ -161,6 +161,18 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 .keys button:active{background:var(--accent-soft)}
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #viewFollow.on{background:var(--accent);color:#fff}
+#advTools{display:none;position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
+  align-items:center;gap:2px;padding:6px 8px;background:#fff;border-radius:20px;box-shadow:0 4px 18px rgba(20,30,50,.18);max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:center;border:2px solid #0a9b5c}
+body.viewing #advTools{display:flex}
+.advlabel{font-size:12px;font-weight:800;color:#0a9b5c;padding:0 6px}
+.ov>.advtx{height:auto;font-size:calc(var(--fs) * var(--u) * 1px);color:var(--c);background:rgba(255,255,255,.9);border:2px solid var(--c);
+  border-radius:10px;padding:.25em .45em;font-weight:700;line-height:1.4;white-space:pre-wrap;word-break:break-all;box-shadow:0 2px 6px rgba(0,0,0,.12)}
+.ov>.advtx::before{content:"💬 ";font-size:.8em}
+.ov>.advimg{border:3px solid #0a9b5c;border-radius:8px;background:#fff;object-fit:contain;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+#btnAdv.on{background:#e7f7ef;outline:2px solid #0a9b5c}
+.lightbox{position:fixed;inset:0;z-index:70;background:rgba(10,15,25,.9);display:flex;align-items:center;justify-content:center}
+.lightbox img{max-width:96vw;max-height:92vh;border-radius:8px;background:#fff}
+.lightbox .ib{position:absolute;top:calc(14px + env(safe-area-inset-top));right:14px;background:#fff}
 body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewing #btnMore, body.viewing #memoClear{display:none!important}
 #toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(25,30,40,.92);color:#fff;
   padding:12px 18px;border-radius:14px;font-size:15px;z-index:60;max-width:90vw;text-align:center;line-height:1.5;pointer-events:none;transition:opacity .2s;opacity:0}
@@ -180,6 +192,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnZoomOut" class="ib" aria-label="小さく">－</button>
     <button id="btnZoomIn" class="ib" aria-label="大きく">＋</button>
     <button id="btnPage" class="pill">1 / 1</button>
+    <button id="btnAdv" class="ib hidden" aria-label="アドバイスの表示">💬</button>
     <button id="btnMemo" class="ib" aria-label="計算メモ">📝</button>
     <button id="btnCoin" class="pill">🪙 <span id="coinNum">0</span></button>
     <button id="btnRed" class="ib" aria-label="赤シート">🟥</button>
@@ -201,6 +214,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
   </div>
   <div id="redsheet" class="hidden"></div>
   <div id="redgrip" class="hidden">⇕ 赤シート</div>
+  <nav id="advTools"></nav>
   <nav id="tools">
     <div id="toolBtns"></div>
     <div id="row2">
@@ -266,6 +280,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 <div id="toast"></div>
 <input type="file" id="filePdf" accept="application/pdf,.pdf" multiple hidden>
 <input type="file" id="fileJson" accept="application/json,.json" hidden>
+<input type="file" id="advImgFile" accept="image/*" hidden>
 
 <script type="module">
 import * as pdfjsLib from './vendor/pdf.min.mjs';
@@ -313,7 +328,8 @@ const state = {
   book:null, pdf:null, pdfId:null, shared:null, ink:new Map(), pages:[], zoom:1,
   revealed:new Set(), revealAll:false, red:false, redTop:0,
   learnAll:new Map(), sharedAll:new Map(), stats:{days:{},updated:0},
-  screen:'lib', lastAct:Date.now(), curPage:0
+  screen:'lib', lastAct:Date.now(), curPage:0,
+  adv:new Map(), advHidden:false, advTool:'hand', advColor:'#0a9b5c', pendingImg:null
 };
 
 /* ================= utils ================= */
@@ -386,7 +402,7 @@ const Cloud = {
   },
   set(s){ this.st=s; renderCloud(); },
   doc(path){ return this.db.doc(this.base + '/' + path); },
-  put(path, body){ if(!this.db || state.viewOnly) return; this.q.set(path, body); clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), this.mode==='cf'?800:2000); },
+  put(path, body, force){ if(!this.db || (state.viewOnly && !force)) return; this.q.set(path, body); clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), this.mode==='cf'?800:2000); },
   async write(path, body){
     if(this.mode==='cf'){
       const r = await api('api/kv?key='+encodeURIComponent(path), {method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
@@ -464,7 +480,7 @@ const Live = {
   send(m){ if(this.open && this.ws?.readyState===1){ try{ this.ws.send(JSON.stringify(m)); }catch{} } },
   // 書いている途中の線は、0.08秒に1回だけ送る
   sendLive(m){
-    if(state.viewOnly || !this.open) return;
+    if(!this.open || (state.viewOnly && m.area!=='adv')) return;
     this.pending=m; const now=Date.now();
     if(now-this.lastSend>=80){ this.lastSend=now; this.send(m); this.pending=null; }
     else if(!this.timer) this.timer=setTimeout(()=>{ this.timer=null; if(this.pending){ this.lastSend=Date.now(); this.send(this.pending); this.pending=null; } }, 80);
@@ -597,7 +613,15 @@ async function syncBookFromCloud(b){
     } else if((local.updated||0) > (data.updated||0)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:local.updated, items:local.items, memo:local.memo||[]});
   }
   for(const [p,r] of state.ink) if(!seen.has(p) && (r.items.length||r.memo?.length)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
+  // アドバイス層
+  const adocs = await Cloud.list(`ln_${L}_${b}/adv`);
+  if(state.book?.id!==b || state.learner!==L) return;
+  for(const {id, data} of adocs){
+    const p=+id.slice(1); if(!Number.isFinite(p)) continue; const local=state.adv.get(p);
+    if(!local || (data.updated||0) > (local.updated||0)){ setAdvRec(b, p, {items:data.items||[], updated:data.updated||0}, false); changed=true; }
+  }
   if(changed){ undoMain.length=0; redoMain.length=0; updUndo(); }
+  renderAdvBtn();
 }
 async function syncCfgFromCloud(){
   if(!Cloud.db) return;
@@ -784,7 +808,8 @@ function onDown(e, el, T){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
   }
-  const tool = state.viewOnly ? 'hand' : T.tool();
+  const tool = state.viewOnly ? ({apen:'pen', aerase:'eraser'}[state.advTool] || 'hand') : T.tool();
+  if(state.viewOnly && T===memoT) return;   // メモは見るだけ
   const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
   if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
   if(cur || !T.canDraw()) return;
@@ -798,6 +823,7 @@ function startCur(e, el, T, tool){
     const mk = tool==='marker';
     const item={k:'s', t:mk?'mk':'pen', c: mk ? state.settings.mk : state.settings.pen, w: mk ? MK_W[state.mkW] : PEN_W[state.penW], p:[rnd(pt.x),rnd(pt.y),pressureOf(e)]};
     if(T.forceColor) item.c=T.forceColor;
+    if(state.viewOnly){ item.c=state.advColor; item.t='pen'; item.w=PEN_W[1]; item.adv=1; }
     cur={kind:'stroke', id:e.pointerId, pointerType:e.pointerType, el, T, item, k: T.unitsPerPx ? T.unitsPerPx() : 10000/T.getW()};
     if(T.liveSetup) T.liveSetup(live); else { const ic=T.inkCanvas(); live.width=ic.width; live.height=ic.height; live.style.left='0'; live.style.top='0'; live.style.width=ic.style.width||'100%'; live.style.height=ic.style.height||'100%'; }
     el.appendChild(live); scheduleLive();
@@ -949,13 +975,15 @@ async function renderDetail(pg){
 function dropDetail(pg){ const d=pg.detail; if(!d) return; d.el.remove(); d.pc.width=d.pc.height=d.ic.width=d.ic.height=0; pg.detail=null; }
 function removeDetail(pg){ pg.dgen=(pg.dgen||0)+1; try{ pg.dtask?.cancel(); }catch{} pg.dtask=null; dropDetail(pg); }
 const detailK = pg => pg.detail.r*pg.w/pg.g.Dw;
-function drawDetailInk(pg){ const d=pg.detail; if(!d) return; const ctx=d.ic.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,d.ic.width,d.ic.height); drawOnPage(ctx, getInk(pg.i).items, pg.g, detailK(pg), d.rect.x*d.r, d.rect.y*d.r); }
+function drawDetailInk(pg){ const d=pg.detail; if(!d) return; const ctx=d.ic.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,d.ic.width,d.ic.height); drawOnPage(ctx, pageItems(pg.i), pg.g, detailK(pg), d.rect.x*d.r, d.rect.y*d.r); }
 function unrenderPage(pg){
   if(!pg.rendered) return; pg.rendered=false; pg.gen++;
   try{ pg.task?.cancel(); }catch{} pg.task=null; removeDetail(pg);
   pg.pdfCv.width=pg.pdfCv.height=0; pg.inkCv.width=pg.inkCv.height=0; pg.ov.innerHTML='';
 }
-function drawInk(pg){ if(!pg.rendered) return; const ctx=pg.inkCv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,pg.inkCv.width,pg.inkCv.height); drawOnPage(ctx, getInk(pg.i).items, pg.g, pg.px); drawDetailInk(pg); }
+const advItems = p => state.advHidden ? [] : (state.adv.get(p)?.items||[]).filter(it=>it.k==='s');
+const pageItems = p => { const a=advItems(p); const i=getInk(p).items; return a.length ? i.concat(a) : i; };
+function drawInk(pg){ if(!pg.rendered) return; const ctx=pg.inkCv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,pg.inkCv.width,pg.inkCv.height); drawOnPage(ctx, pageItems(pg.i), pg.g, pg.px); drawDetailInk(pg); }
 function renderOverlay(pg){
   if(!pg.rendered) return; const ov=pg.ov; ov.innerHTML=''; const p=pg.i, sh=state.shared, b=state.book.id;
   for(const m of sh.masks){ if(m.p!==p) continue;
@@ -965,6 +993,13 @@ function renderOverlay(pg){
     const d=document.createElement('div'); d.className='region'; setRect(d, rectMap(toD,pg.g,q)); const st=problemStatus(b, q.id);
     d.innerHTML=`<span class="badge ${st.cls}">${st.icon} 問${q.n}</span>`;
     if(state.tool==='region') addDel(d, ()=>removeShared('problems', q, p)); ov.appendChild(d); }
+  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k!=='tx') continue;
+    const d=document.createElement('div'); d.className='advtx'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
+    d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--fs:${t.fs};--c:${t.c}`; d.textContent=t.text; ov.appendChild(d); }
+  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k!=='im') continue;
+    const d=document.createElement('img'); d.className='advimg'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
+    d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--h:${t.h}`; d.alt='';
+    imgURL(t.img).then(u=>{ if(u) d.src=u; }); ov.appendChild(d); }
 }
 function addDel(d, fn){ const x=document.createElement('div'); x.className='del'; x.textContent='×'; x.addEventListener('pointerdown', e=>{ e.stopPropagation(); e.preventDefault(); fn(); }); d.appendChild(x); }
 function removeShared(list, obj, p){
@@ -977,7 +1012,7 @@ function removeShared(list, obj, p){
 function pageTarget(pg){
   const p=pg.i;
   return {
-    getW:()=>pg.w, ownPinch:true, liveInfo:()=>({area:'page', p}), unitsPerPx:()=>pg.g.Dw/pg.w, tool:()=>state.tool, canDraw:()=>pg.rendered, scroller:()=>$('#viewer'),
+    getW:()=>pg.w, ownPinch:true, liveInfo:()=>({area: state.viewOnly?'adv':'page', p}), unitsPerPx:()=>pg.g.Dw/pg.w, tool:()=>state.tool, canDraw:()=>pg.rendered, scroller:()=>$('#viewer'),
     toPt(e){ const r=pg.el.getBoundingClientRect(); const k=pg.g.Dw/pg.w; return toB(pg.g, (e.clientX-r.left)*k, (e.clientY-r.top)*k); },
     dispRect:r=>rectMap(toD,pg.g,r),
     liveSetup(lv){
@@ -987,15 +1022,24 @@ function pageTarget(pg){
       pg.liveD = d || null;
     },
     drawLive(ctx,item){ const d=pg.liveD; if(d && d===pg.detail) drawOnPage(ctx,[item],pg.g,detailK(pg),d.rect.x*d.r,d.rect.y*d.r); else drawOnPage(ctx,[item],pg.g,pg.px); },
-    items:()=>getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
-    inkRedraw:()=>drawInk(pg),
+    items:()=> state.viewOnly ? getAdv(p).items : getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
+    inkRedraw:()=>{ drawInk(pg); if(state.viewOnly) saveAdv(p); },
     addStroke(item){
+      if(state.viewOnly){ // おうちの人のアドバイス
+        const a=getAdv(p); a.items.push(item); drawInk(pg); saveAdv(p);
+        pushUndo({undo:()=>{ const j=getAdv(p).items.indexOf(item); if(j>=0) getAdv(p).items.splice(j,1); drawInk(pg); saveAdv(p); },
+                  redo:()=>{ getAdv(p).items.push(item); drawInk(pg); saveAdv(p); }});
+        return;
+      }
       const rec=getInk(p); rec.items.push(item); drawOnPage(pg.inkCv.getContext('2d'), [item], pg.g, pg.px);
       const d=pg.detail; if(d) drawOnPage(d.ic.getContext('2d'), [item], pg.g, detailK(pg), d.rect.x*d.r, d.rect.y*d.r); saveInk(p);
       pushUndo({undo:()=>{ const r=getInk(p); const j=r.items.indexOf(item); if(j>=0) r.items.splice(j,1); drawInk(pg); saveInk(p); },
                 redo:()=>{ getInk(p).items.push(item); drawInk(pg); saveInk(p); }});
     },
     commitErase(list){
+      if(state.viewOnly){ saveAdv(p);
+        pushUndo({undo:()=>{ getAdv(p).items.push(...list); drawInk(pg); saveAdv(p); },
+                  redo:()=>{ const a=getAdv(p); a.items=a.items.filter(it=>!list.includes(it)); drawInk(pg); saveAdv(p); }}); return; }
       saveInk(p);
       pushUndo({undo:()=>{ getInk(p).items.push(...list); drawInk(pg); saveInk(p); },
                 redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); saveInk(p); }});
@@ -1016,7 +1060,9 @@ function pageTarget(pg){
         redo(); pushUndo({undo,redo});
       }
     },
-    tap(pt){
+    tap(pt, e){
+      if(state.viewOnly && (state.advTool==='atext'||state.advTool==='aimg')){ advTextAt(pg, pt, e); return; }
+      if(e && !state.advHidden){ const h=advHit(pg,e); if(h?.k==='im'){ imgURL(h.img).then(u=>u&&showLightbox(u)); return; } }
       const hit = state.shared.masks.filter(m=>m.p===p && pt.x>=m.x && pt.x<=m.x+m.w && pt.y>=m.y && pt.y<=m.y+m.h);
       if(!hit.length) return;
       if(state.revealAll){ state.revealAll=false; state.revealed=new Set(state.shared.masks.map(m=>m.id)); }
@@ -1412,6 +1458,8 @@ async function openBook(id){
   undoMain.length=0; redoMain.length=0; updUndo();
   const rows=await store.range('ink', `${state.learner}|${id}|`);
   state.ink=new Map(rows.map(([k,v])=>[+k.split('|')[2], v]));
+  const arows=await store.range('ink', `adv|${state.learner}|${id}|`);
+  state.adv=new Map(arows.map(([k,v])=>[+k.split('|')[3], v]));
   buildPages(); renderTools();
   state.curPage=getLearn(id).lastPage||0; renderPageBtn();
   requestAnimationFrame(()=>scrollToPage(state.curPage));
@@ -1706,7 +1754,7 @@ async function pushBookToCloud(id, buf){
 }
 async function pushAllBooksToCloud(){
   if(Cloud.mode!=='cf') return;
-  for(const [id] of await store.all('files')){ if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
+  for(const [id] of await store.all('files')){ if(String(id).startsWith('img|')) continue; if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
 }
 
 /* ================= パスコード画面 ================= */
@@ -1761,7 +1809,7 @@ async function chooseViewLearner(){
   if(L) enterView(L);
 }
 async function enterView(L){
-  state.viewOnly=true; state.viewFollow=true; state.myLearner=state.learner; state.learner=L;
+  state.viewOnly=true; state.viewFollow=true; state.myLearner=state.learner; state.learner=L; state.advTool='hand'; renderAdvTools();
   document.body.classList.add('viewing'); setMemo(false);
   await loadAllForLearner(); await syncLearnerFromCloud();
   Live.send({t:'hello'});
@@ -1770,7 +1818,7 @@ async function enterView(L){
   renderViewBar();
 }
 async function exitView(){
-  state.viewOnly=false; document.body.classList.remove('viewing');
+  state.viewOnly=false; document.body.classList.remove('viewing'); applyTouchMode();
   state.learner=state.myLearner||state.learner; state.book=null;
   await loadAllForLearner(); showScreen('lib'); renderLib(); renderViewBar();
 }
@@ -1790,7 +1838,15 @@ function clearViewLive(p){ const pg=state.pages[p]; if(pg?.vlive){ pg.vlive.getC
 async function onLiveMsg(m){
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
-  if(!state.viewOnly || m.L && m.L!==state.learner) return;
+  if(m.L && m.L!==state.learner) return;
+  if(m.t==='adv'){ setAdvRec(m.b, m.p, m.rec, true); return; }
+  if(m.t==='live' && m.area==='adv'){
+    if(state.viewOnly || state.advHidden || state.book?.id!==m.b || !m.item) return;
+    const pg=state.pages[m.p]; if(!pg?.rendered) return;
+    const cv=viewLiveCanvas(pg), ctx=cv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+    drawOnPage(ctx, [m.item], pg.g, pg.px); return;
+  }
+  if(!state.viewOnly) return;
   if(m.t==='page' && state.book?.id===m.b){
     state.ink.set(m.p, m.rec); store.put('ink', inkKey(m.b,m.p), m.rec).catch(()=>{});
     const pg=state.pages[m.p]; if(pg?.rendered){ drawInk(pg); clearViewLive(m.p); }
@@ -1814,6 +1870,125 @@ async function onLiveMsg(m){
 $('#viewFollow').onclick=()=>{ state.viewFollow=!state.viewFollow; renderViewBar(); const c=state.liveCur?.[state.learner]; if(state.viewFollow && c) followTo(c); };
 $('#viewExit').onclick=()=>exitView();
 $('#btnLibWatch').onclick=()=>chooseViewLearner();
+
+
+/* ================= アドバイス層（おうちの人 → 子ども）：手書き・文字・画像 ================= */
+const ADV_COLORS=[['#0a9b5c','みどり'],['#e11d48','あか'],['#1f5fd6','あお']];
+const ADV_FS=[230,330,470];
+function getAdv(p){ let r=state.adv.get(p); if(!r){ r={items:[], updated:0}; state.adv.set(p,r); } return r; }
+const advKey=(b,p,L=state.learner)=>`adv|${L}|${b}|${p}`;
+function saveAdv(p){
+  const r=getAdv(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
+  Live.send({t:'adv', L, b, p, rec:{items:r.items, updated:r.updated}});
+  debounce('adv'+L+b+p, ()=>{
+    store.put('ink', advKey(b,p,L), r).catch(()=>{});
+    Cloud.put(`ln_${L}_${b}/adv/p${p}`, {kind:'adv', updated:r.updated, items:r.items}, true);
+  }, 500);
+  renderAdvBtn();
+}
+function setAdvRec(b, p, rec, notify){
+  store.put('ink', advKey(b,p), rec).catch(()=>{});
+  if(state.book?.id!==b){ if(notify && !state.viewOnly && rec.items?.length) toast('💬 アドバイスがとどいたよ', 2600); return; }
+  const before=(state.adv.get(p)?.items||[]).length;
+  state.adv.set(p, rec);
+  const pg=state.pages[p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } clearViewLive(p);
+  if(notify && !state.viewOnly && (rec.items?.length||0)>before){
+    toast(`💬 アドバイスがとどいたよ（${p+1}ページ）`, 2800);
+    if(state.settings.sound){ tone(880,0,.15,'sine',.1); tone(1175,.12,.25,'sine',.1); }
+    if(state.advHidden){ state.advHidden=false; state.pages.forEach(pg=>{ drawInk(pg); renderOverlay(pg); }); }
+  }
+  renderAdvBtn();
+}
+function renderAdvBtn(){
+  const b=$('#btnAdv'); if(!b) return;
+  let n=0; for(const r of state.adv?.values?.()||[]) n+=r.items.length;
+  b.classList.toggle('hidden', state.viewOnly || !n); b.classList.toggle('on', !state.advHidden);
+  b.textContent = state.advHidden ? '💬✕' : '💬';
+}
+$('#btnAdv').onclick=()=>{ state.advHidden=!state.advHidden; state.pages.forEach(pg=>{ drawInk(pg); renderOverlay(pg); }); renderAdvBtn(); toast(state.advHidden?'アドバイスをかくしました':'アドバイスを表示しました',1400); };
+
+// 画像（端末に保存し、Cloudflare版ならクラウドにも置く）
+const imgURLs=new Map();
+async function imgURL(id){
+  if(imgURLs.has(id)) return imgURLs.get(id);
+  let buf=await store.get('files','img|'+id);
+  if(!buf && Cloud.mode==='cf'){ try{ const r=await api('api/blob/'+id); if(r.ok){ buf=await r.arrayBuffer(); store.put('files','img|'+id, buf).catch(()=>{}); } }catch{} }
+  if(!buf) return null;
+  const u=URL.createObjectURL(new Blob([buf],{type:'image/jpeg'})); imgURLs.set(id,u); return u;
+}
+async function prepareImage(file){
+  const bmp=await createImageBitmap(file);
+  const k=Math.min(1, 1600/Math.max(bmp.width,bmp.height));
+  const c=document.createElement('canvas'); c.width=Math.round(bmp.width*k); c.height=Math.round(bmp.height*k);
+  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,c.width,c.height); ctx.drawImage(bmp,0,0,c.width,c.height);
+  const blob=await new Promise(res=>c.toBlob(res,'image/jpeg',.85)); const buf=await blob.arrayBuffer();
+  const id=await sha(buf);
+  await store.put('files','img|'+id, buf);
+  if(Cloud.mode==='cf') api('api/blob/'+id,{method:'PUT', headers:{'content-type':'image/jpeg'}, body:buf}).catch(()=>{});
+  return {id, aspect:c.height/c.width};
+}
+function advHit(pg, e){
+  const els=[...pg.ov.querySelectorAll('.advtx,.advimg')].reverse();
+  for(const el of els){ const r=el.getBoundingClientRect(); if(e.clientX>=r.left && e.clientX<=r.right && e.clientY>=r.top && e.clientY<=r.bottom) return getAdv(pg.i).items.find(x=>x.id===el.dataset.id); }
+  return null;
+}
+function advReplace(p, oldIt, newIt){
+  const pg=state.pages[p];
+  const swap=(a,b)=>{ const arr=getAdv(p).items; const j=arr.indexOf(a); if(b){ if(j>=0) arr[j]=b; else arr.push(b); } else if(j>=0) arr.splice(j,1); saveAdv(p); if(pg){ drawInk(pg); renderOverlay(pg); } };
+  if(!oldIt){ getAdv(p).items.push(newIt); saveAdv(p); if(pg) renderOverlay(pg); pushUndo({undo:()=>swap(newIt,null), redo:()=>{ getAdv(p).items.push(newIt); saveAdv(p); if(pg) renderOverlay(pg); }}); return; }
+  swap(oldIt,newIt); pushUndo({undo:()=>{ if(newIt) swap(newIt,oldIt); else { getAdv(p).items.push(oldIt); saveAdv(p); if(pg) renderOverlay(pg); } }, redo:()=>swap(oldIt,newIt)});
+}
+async function textSheet(it){
+  let fs = it ? Math.max(0, ADV_FS.indexOf(it.fs)) : 1;
+  return openSheet(`<h3>🔤 文字でアドバイス</h3>
+    <textarea id="advTxt" class="txt" style="height:130px;padding:10px;font-size:17px;line-height:1.5">${esc(it?.text||'')}</textarea>
+    <div class="row" style="margin-bottom:14px">大きさ：${['小','中','大'].map((l,i)=>`<button class="chip ${i===fs?'on':''}" data-fs="${i}">${l}</button>`).join('')}</div>
+    <div class="grid2">${it?'<button class="btn red" data-a="del">けす</button>':'<button class="btn sub" data-a="0">やめる</button>'}<button class="btn" data-a="1">${it?'なおす':'のせる'}</button></div>`,
+    close=>{ const sh=$('#sheet'); const ta=$('#advTxt'); setTimeout(()=>ta.focus(),60);
+      sh.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{ fs=+b.dataset.fs; sh.querySelectorAll('[data-fs]').forEach(x=>x.classList.toggle('on',x===b)); });
+      sh.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a==='1' ? {text:ta.value.trim().slice(0,800), fs:ADV_FS[fs]} : b.dataset.a==='del' ? 'del' : null)); });
+}
+async function imageSheet(it){
+  return openSheet(`<h3>🖼 画像</h3><div class="grid2" style="margin-bottom:10px"><button class="btn sub" data-a="small">小さく</button><button class="btn sub" data-a="big">大きく</button></div>
+    <div class="grid2"><button class="btn red" data-a="del">けす</button><button class="btn" data-a="0">とじる</button></div>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+}
+async function advTextAt(pg, pt, e){
+  const p=pg.i, hit=advHit(pg,e);
+  if(hit?.k==='tx'){ const r=await textSheet(hit); if(r==='del') advReplace(p,hit,null); else if(r && r.text) advReplace(p,hit,{...hit, ...r}); return; }
+  if(hit?.k==='im'){ const r=await imageSheet(hit); if(r==='del') advReplace(p,hit,null);
+    else if(r==='small'||r==='big'){ const k=r==='big'?1.3:1/1.3; advReplace(p,hit,{...hit, w:Math.round(hit.w*k), h:Math.round(hit.h*k)}); } return; }
+  if(state.advTool==='aimg'){
+    const pend=state.pendingImg; if(!pend){ $('#advImgFile').click(); return; }
+    const w=4000; advReplace(p,null,{k:'im', id:uid('a'), img:pend.id, x:rnd(pt.x), y:rnd(pt.y), w, h:rnd(w*pend.aspect)});
+    state.pendingImg=null; state.advTool='hand'; renderAdvTools(); return;
+  }
+  const r=await textSheet(null); if(r && r!=='del' && r.text) advReplace(p,null,{k:'tx', id:uid('a'), x:rnd(pt.x), y:rnd(pt.y), w:3600, fs:r.fs, text:r.text, c:state.advColor});
+}
+$('#advImgFile').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{ toast('画像を準備しています…', 4000); state.pendingImg=await prepareImage(f); state.advTool='aimg'; renderAdvTools(); toast('🖼 貼りたい場所をタップしてください', 3000); }
+  catch(err){ console.warn(err); toast('この画像は使えませんでした'); }
+};
+function renderAdvTools(){
+  const t=state.advTool;
+  const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
+  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aerase','🧽','消す')
+    + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
+    + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
+  document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
+}
+$('#advTools').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); renderAdvTools(); }
+  else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
+  else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
+});
+// 子ども側：画像をタップすると大きく見られる
+function showLightbox(url){
+  const d=document.createElement('div'); d.className='lightbox'; d.innerHTML=`<img src="${url}"><button class="ib">✕</button>`;
+  d.onclick=()=>d.remove(); document.body.appendChild(d);
+}
 
 
 /* ================= boot ================= */
