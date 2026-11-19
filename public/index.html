@@ -150,6 +150,18 @@ body.fd #rvStage{touch-action:none}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid2 .btn{height:56px;font-size:16px}
 input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;font-size:18px;margin-bottom:14px;-webkit-user-select:text;user-select:text}
+#login{display:flex;align-items:center;justify-content:center;background:#f3f6fb}
+.pinbox{text-align:center;padding:24px;max-width:420px;width:100%}
+#pinDots{display:flex;gap:16px;justify-content:center;margin:6px 0 10px}
+#pinDots span{width:18px;height:18px;border-radius:50%;border:2px solid var(--accent)}
+#pinDots span.on{background:var(--accent)}
+#pinMsg{min-height:24px;color:#c4001c;font-size:14px;margin-bottom:10px}
+.keys{display:grid;grid-template-columns:repeat(3,84px);gap:14px;justify-content:center}
+.keys button{width:84px;height:84px;border-radius:50%;background:#fff;font-size:30px;font-weight:600;box-shadow:0 1px 4px rgba(20,30,50,.15)}
+.keys button:active{background:var(--accent-soft)}
+#viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
+#viewFollow.on{background:var(--accent);color:#fff}
+body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewing #btnMore, body.viewing #memoClear{display:none!important}
 #toast{position:fixed;left:50%;top:calc(70px + env(safe-area-inset-top));transform:translateX(-50%);background:rgba(25,30,40,.92);color:#fff;
   padding:12px 18px;border-radius:14px;font-size:15px;z-index:60;max-width:90vw;text-align:center;line-height:1.5;pointer-events:none;transition:opacity .2s;opacity:0}
 #toast.show{opacity:1}
@@ -175,6 +187,8 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
     <button id="btnReview" class="pill">🔁 復習 <b id="dueCount">0</b></button>
     <button id="btnMore" class="ib" aria-label="メニュー">⋯</button>
   </header>
+  <div id="viewBar" class="hidden"><span id="viewText"></span><div class="sp"></div>
+    <button id="viewFollow" class="pill">ついていく</button><button id="viewExit" class="pill">おわる</button></div>
   <div id="mainArea">
     <main id="viewer"><div id="pages"></div></main>
     <div id="memo" class="hidden">
@@ -207,6 +221,7 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
     <button id="btnAdd" class="big">＋ 問題集のPDFを入れる</button>
     <button id="btnLibReview" class="big sub">🔁 間違えた問題の復習 <span id="libDue"></span></button>
     <button id="btnLibReward" class="big sub">🎁 ごほうび（🪙 <span id="libCoin">0</span>）</button>
+    <button id="btnLibWatch" class="big sub hidden">👀 見守る（ほかの端末で書いている様子を見る）</button>
     <div id="todayBox" class="note"></div>
     <h2>本棚</h2>
     <div id="bookList"></div>
@@ -237,6 +252,15 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 </section>
 
 <section id="rewardScr" class="screen hidden"><div class="wrap" id="rwBody"></div></section>
+
+<section id="login" class="screen hidden" style="z-index:30">
+  <div class="pinbox">
+    <div style="font-size:54px">📚</div><h1 style="margin:6px 0 4px">トキノート</h1>
+    <p class="note" style="margin:0 0 18px">パスコードを入れてください</p>
+    <div id="pinDots"></div><div id="pinMsg"></div>
+    <div class="keys"><button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><span></span><button data-k="0">0</button><button data-k="del" aria-label="1文字けす">⌫</button></div>
+  </div>
+</section>
 
 <div id="veil" class="hidden"><div id="sheet"></div></div>
 <div id="toast"></div>
@@ -336,45 +360,119 @@ async function initStore(){
   try{ await navigator.storage?.persist?.(); }catch{}
 }
 
-/* ================= cloud (Claude artifact db) ================= */
+/* ================= cloud ================= */
+// 2つの保存先に対応：
+//  'cf'     … 自分のCloudflare Worker（/api/*）。パスコードでログインし、見守り（リアルタイム）も使える
+//  'claude' … claude.ai アーティファクトのDB（ログイン中ユーザーの非公開領域）
+const api = (path, opt={}) => fetch(path, {credentials:'same-origin', cache:'no-store', ...opt});
 const Cloud = {
-  db:null, base:'', st:'connecting', q:new Map(), busy:new Set(), timer:null, warned:{},
+  mode:null, db:null, base:'', st:'connecting', q:new Map(), busy:new Set(), timer:null, warned:{},
   async init(){
+    // まず Cloudflare 版かどうかを確かめる（claude.ai の中ではこの通信は止められる）
+    try{
+      const r = await withTimeout(api('api/health'), 6000);
+      if(r.ok){ const j=await r.json(); if(j.app==='tokinote'){
+        if(!j.configured){ await showSetupNeeded(); return; }
+        if(!j.authed) await showLogin();
+        this.mode='cf'; this.db=true; this.set('on'); Live.connect(); return; } }
+    }catch{}
     try{
       if(!window.claude || typeof window.claude.use !== 'function'){ this.set('off'); return; }
       const [db,user] = await Promise.all([window.claude.use('db'), window.claude.use('user')]);
       if(!db || !user){ this.set('off'); return; }
       const id = await user.id(); if(!id){ this.set('off'); return; }
-      this.db = db; this.base = 'data/users/' + id; this.set('on');
+      this.mode='claude'; this.db = db; this.base = 'data/users/' + id; this.set('on');
     }catch(e){ this.set('off'); }
   },
   set(s){ this.st=s; renderCloud(); },
   doc(path){ return this.db.doc(this.base + '/' + path); },
-  put(path, body){ if(!this.db) return; this.q.set(path, body); clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), 2000); },
+  put(path, body){ if(!this.db || state.viewOnly) return; this.q.set(path, body); clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), this.mode==='cf'?800:2000); },
+  async write(path, body){
+    if(this.mode==='cf'){
+      const r = await api('api/kv?key='+encodeURIComponent(path), {method:'PUT', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
+      if(r.status===401){ throw {code:'auth'}; }
+      if(r.status===413) throw {code:'invalid_argument'};
+      if(!r.ok) throw {code:'unavailable'};
+      return;
+    }
+    return this.doc(path).set(body);
+  },
   async flush(){
     if(!this.db) return;
     for(const [path,body] of [...this.q]){
       if(this.busy.has(path)) continue;
       this.q.delete(path); this.busy.add(path); this.set('saving');
-      try{ await this.doc(path).set(body); }
+      try{ await this.write(path, body); }
       catch(e){
         const c = e?.code;
         if(c==='invalid_argument'){ if(!this.warned.big){ this.warned.big=1; toast('書き込みがとても多いページはクラウドに保存できませんでした（この端末には保存済み）', 6000);} }
         else if(c==='quota_exceeded'){ if(!this.warned.q){ this.warned.q=1; toast('クラウドの保存容量がいっぱいです（この端末には保存済み）', 6000);} }
+        else if(c==='auth'){ if(!this.q.has(path)) this.q.set(path, body); this.busy.delete(path); await showLogin(); }
         else if(['revoked','not_granted','capability_disabled','capability_removed'].includes(c)){ this.db=null; this.set('off'); return; }
         else if(!this.q.has(path)) this.q.set(path, body);
       }finally{ this.busy.delete(path); }
     }
     if(this.q.size){ clearTimeout(this.timer); this.timer=setTimeout(()=>this.flush(), 4000); } else this.set('on');
   },
-  async get(path){ if(!this.db) return null; try{ const s=await withTimeout(this.doc(path).get(), 10000); return s.exists ? clone(s.data()) : null; }catch{ return null; } },
+  async get(path){
+    if(!this.db) return null;
+    try{
+      if(this.mode==='cf'){ const r=await withTimeout(api('api/kv?key='+encodeURIComponent(path)), 10000); return r.ok ? await r.json() : null; }
+      const s=await withTimeout(this.doc(path).get(), 10000); return s.exists ? clone(s.data()) : null;
+    }catch{ return null; }
+  },
   async list(colPath, where){
     if(!this.db) return [];
-    try{ let q = this.db.collection(this.base + (colPath ? '/'+colPath : '')); if(where) q = q.where(...where);
-      const s = await withTimeout(q.get(), 10000); return s.docs.map(d=>({id:d.id, data:clone(d.data())})); }
-    catch{ return []; }
+    try{
+      if(this.mode==='cf'){
+        const q=new URLSearchParams({col:colPath||''}); if(where){ q.set('field',where[0]); q.set('value',where[2]); }
+        const r=await withTimeout(api('api/kv/list?'+q), 15000); return r.ok ? await r.json() : [];
+      }
+      let q = this.db.collection(this.base + (colPath ? '/'+colPath : '')); if(where) q = q.where(...where);
+      const s = await withTimeout(q.get(), 10000); return s.docs.map(d=>({id:d.id, data:clone(d.data())}));
+    }catch{ return []; }
+  },
+  // PDF本体（Cloudflare版だけ）
+  async hasPdf(id){ if(this.mode!=='cf') return false; try{ const r=await api('api/pdf/'+id, {method:'HEAD'}); return r.ok; }catch{ return false; } },
+  async uploadPdf(id, buf, name){
+    if(this.mode!=='cf') return false;
+    if(await this.hasPdf(id)) return true;
+    try{ const r=await api(`api/pdf/${id}?name=${encodeURIComponent(name||'')}`, {method:'PUT', headers:{'content-type':'application/pdf'}, body:buf});
+      if(r.status===413){ toast('PDFが大きすぎてクラウドに置けませんでした（95MBまで）。この端末では使えます', 6000); return false; }
+      return r.ok; }catch{ return false; }
+  },
+  async downloadPdf(id){
+    if(this.mode!=='cf') return null;
+    try{ const r=await api('api/pdf/'+id); return r.ok ? await r.arrayBuffer() : null; }catch{ return null; }
   }
 };
+
+/* ================= Live（見守り：Cloudflare版だけ） ================= */
+const Live = {
+  ws:null, open:false, retry:0, lastSend:0, pending:null, timer:null, onMsg:null,
+  connect(){
+    if(Cloud.mode!=='cf') return;
+    try{
+      const u=new URL('api/live', location.href); u.protocol = u.protocol==='https:'?'wss:':'ws:';
+      const ws=new WebSocket(u); this.ws=ws;
+      ws.onopen=()=>{ this.open=true; this.retry=0; if(state.viewOnly) this.send({t:'hello'}); else sendCur(); };
+      ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch{ return; } onLiveMsg(m); };
+      ws.onclose=()=>{ this.open=false; this.ws=null; const d=Math.min(30000, 1000*2**this.retry++); setTimeout(()=>this.connect(), d); };
+      ws.onerror=()=>{ try{ ws.close(); }catch{} };
+    }catch{}
+  },
+  send(m){ if(this.open && this.ws?.readyState===1){ try{ this.ws.send(JSON.stringify(m)); }catch{} } },
+  // 書いている途中の線は、0.08秒に1回だけ送る
+  sendLive(m){
+    if(state.viewOnly || !this.open) return;
+    this.pending=m; const now=Date.now();
+    if(now-this.lastSend>=80){ this.lastSend=now; this.send(m); this.pending=null; }
+    else if(!this.timer) this.timer=setTimeout(()=>{ this.timer=null; if(this.pending){ this.lastSend=Date.now(); this.send(this.pending); this.pending=null; } }, 80);
+  }
+};
+setInterval(()=>Live.send({t:'ping'}), 25000);
+function sendCur(){ if(Cloud.mode!=='cf' || state.viewOnly || !state.book) return; Live.send({t:'cur', L:state.learner, b:state.book.id, p:state.curPage, name:state.book.name}); }
+
 function renderCloud(){
   const el=$('#cloud'); if(!el) return;
   el.textContent = Cloud.st==='on' ? '☁️✓' : Cloud.st==='saving' ? '☁️…' : Cloud.st==='connecting' ? '☁️' : '📱';
@@ -398,31 +496,38 @@ function getLearn(b){ let l=state.learnAll.get(b); if(!l){ l=emptyLearn(); state
 function getShared(b){ let s=state.sharedAll.get(b); if(!s){ s=emptyShared(); state.sharedAll.set(b,s); } return s; }
 
 function saveLearn(b){
+  if(state.viewOnly) return;
   const l=getLearn(b); l.updated=Date.now(); const L=state.learner;
   debounce('learn'+L+b, ()=>{
     store.put('learn', learnKey(b,L), l).catch(()=>{});
     Cloud.put(`ln_${L}_${b}`, {...l, kind:'learn', book:b, learner:L});
+    Live.send({t:'learn', L, b, learn:l});
   }, 400);
   refreshDue();
 }
 function saveShared(b){
+  if(state.viewOnly) return;
   const s=getShared(b); s.updated=Date.now();
   debounce('shared'+b, ()=>{
     store.put('shared', b, s).catch(()=>{});
     Cloud.put(`sh_${b}`, {...s, kind:'shared', book:b});
+    Live.send({t:'shared', b, shared:s});
   }, 400);
 }
 function getInk(p){ let r=state.ink.get(p); if(!r){ r={items:[], updated:0}; state.ink.set(p,r); } return r; }
 function saveInk(p){
+  if(state.viewOnly) return;
   const r=getInk(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
+  Live.send({t:'page', L, b, p, rec:{items:r.items, memo:r.memo||[], updated:r.updated}});
   debounce('ink'+L+b+p, ()=>{
     store.put('ink', inkKey(b,p,L), r).catch(()=>{});
     Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
   }, 600);
 }
 function saveStats(){
+  if(state.viewOnly) return;
   state.stats.updated=Date.now(); const L=state.learner, st=state.stats;
-  debounce('stats'+L, ()=>{ store.put('meta','stats|'+L, st).catch(()=>{}); Cloud.put(`st_${L}`, {...st, kind:'stats'}); }, 1500);
+  debounce('stats'+L, ()=>{ store.put('meta','stats|'+L, st).catch(()=>{}); Cloud.put(`st_${L}`, {...st, kind:'stats'}); Live.send({t:'stats', L, stats:st}); }, 1500);
 }
 function saveMeta(){
   store.put('meta','settings', state.settings).catch(()=>{});
@@ -557,7 +662,7 @@ function renderStats(){
   const tb=$('#todayBox'); if(tb) tb.textContent = txt;
 }
 setInterval(()=>{
-  const active = document.visibilityState==='visible' && Date.now()-state.lastAct < 120000 &&
+  const active = !state.viewOnly && document.visibilityState==='visible' && Date.now()-state.lastAct < 120000 &&
     ((state.screen==='main' && state.book) || state.screen==='solve');
   if(active){ today().sec += 15; saveStats(); renderStats(); updateCoins(); }
 }, 15000);
@@ -679,7 +784,7 @@ function onDown(e, el, T){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
   }
-  const tool=T.tool();
+  const tool = state.viewOnly ? 'hand' : T.tool();
   const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
   if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
   if(cur || !T.canDraw()) return;
@@ -718,6 +823,7 @@ function onMove(e){
     const p=cur.item.p;
     for(const ev of evs){ const pt=toNorm(ev,cur.el,cur.T); if(Math.hypot(pt.x-p[p.length-3], pt.y-p[p.length-2]) < .7*cur.k) continue; p.push(rnd(pt.x),rnd(pt.y),pressureOf(ev)); }
     scheduleLive();
+    if(cur.T.liveInfo && Cloud.mode==='cf') Live.sendLive({t:'live', L:state.learner, b:state.book?.id, ...cur.T.liveInfo(), item:cur.item});
   } else if(cur.kind==='erase'){ for(const ev of evs) eraseAt(cur, toNorm(ev,cur.el,cur.T)); }
   else if(cur.kind==='rect'){ const pt=toNorm(e,cur.el,cur.T); cur.last=pt; setRect(cur.rb, cur.T.dispRect(normRect(cur.x0,cur.y0,pt.x,pt.y))); }
 }
@@ -871,7 +977,7 @@ function removeShared(list, obj, p){
 function pageTarget(pg){
   const p=pg.i;
   return {
-    getW:()=>pg.w, ownPinch:true, unitsPerPx:()=>pg.g.Dw/pg.w, tool:()=>state.tool, canDraw:()=>pg.rendered, scroller:()=>$('#viewer'),
+    getW:()=>pg.w, ownPinch:true, liveInfo:()=>({area:'page', p}), unitsPerPx:()=>pg.g.Dw/pg.w, tool:()=>state.tool, canDraw:()=>pg.rendered, scroller:()=>$('#viewer'),
     toPt(e){ const r=pg.el.getBoundingClientRect(); const k=pg.g.Dw/pg.w; return toB(pg.g, (e.clientX-r.left)*k, (e.clientY-r.top)*k); },
     dispRect:r=>rectMap(toD,pg.g,r),
     liveSetup(lv){
@@ -966,7 +1072,7 @@ function currentPageFromScroll(){
 $('#viewer').addEventListener('scroll', ()=>{
   state.lastAct=Date.now(); if(!state.book) return;
   scheduleDetails();
-  const p=currentPageFromScroll(); if(p!==state.curPage){ state.curPage=p; renderPageBtn(); if(state.memoOpen) showMemoFor(p); }
+  const p=currentPageFromScroll(); if(p!==state.curPage){ state.curPage=p; renderPageBtn(); if(state.memoOpen) showMemoFor(p); sendCur(); renderViewBar(); }
   debounce('lastpage', ()=>{ if(!state.book) return; const l=getLearn(state.book.id); if(l.lastPage!==state.curPage){ l.lastPage=state.curPage; saveLearn(state.book.id); } }, 2500);
 }, {passive:true});
 function renderPageBtn(){ $('#btnPage').textContent = `${state.curPage+1} / ${state.book?.pages||1}`; }
@@ -1126,7 +1232,8 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="clearAll"><span>全ページの書き込みを消す<br><span class="s">問題集を新品に戻して解き直す</span></span><span>📄</span></button>
   <button class="opt" data-a="backup"><span>バックアップを保存<br><span class="s">書き込み・丸つけ・記録（PDF本体は含みません）</span></span><span>💾</span></button>
   <button class="opt" data-a="restore"><span>バックアップから戻す</span><span>📥</span></button>
-  <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>`,
+  <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>
+  ${Cloud.mode==='cf'?'<button class="opt" data-a="logout"><span>この端末でログアウト<br><span class="s">次に開くときはパスコードが必要です</span></span><span>🔒</span></button>':''}`,
   close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a))
 ).then(a=>menuAction(a));
 
@@ -1140,6 +1247,7 @@ async function menuAction(a){
   else if(a==='backup') exportBackup();
   else if(a==='restore') $('#fileJson').click();
   else if(a==='help') showHelp();
+  else if(a==='logout'){ if(await confirmDlg('ログアウト','この端末でログアウトします。書き込みはクラウドに残ります。','ログアウト')){ await Cloud.flush(); await api('api/logout',{method:'POST'}).catch(()=>{}); location.reload(); } }
 }
 function clearStrokes(pages){
   const saved=new Map();
@@ -1217,13 +1325,21 @@ async function renderLib(){
       <div class="m">${bk.pages}ページ${l?.lastPage?` ・ 前回 ${l.lastPage+1}ページ`:''}${has?'':' ・ PDFをもう一度入れると開けます'}</div></div>
       ${has?`<button class="btn" data-open="${bk.id}">開く</button>`:''}<button class="btn sub" data-rm="${bk.id}">⋯</button></div>`;
   }
+  const cloudBooks = Cloud.mode==='cf' ? new Map((await Cloud.list('', ['kind','==','book'])).map(x=>[x.data.id, x.data])) : new Map();
+  for(const [b,cb] of cloudBooks){
+    if(books.some(x=>x.id===b)) continue;
+    h+=`<div class="card"><div style="font-size:30px">☁️</div><div class="grow"><div class="t">${esc(cb.name)}</div><div class="m">${cb.pages||''}ページ ・ クラウドにあります（開くとこの端末に取り寄せます）</div></div><button class="btn" data-open="${b}">開く</button></div>`;
+  }
   for(const [b,sh] of state.sharedAll){
-    if(books.some(x=>x.id===b) || !sh.name) continue;
+    if(books.some(x=>x.id===b) || cloudBooks.has(b) || !sh.name) continue;
     h+=`<div class="card ghost"><div style="font-size:30px">☁️</div><div class="grow"><div class="t">${esc(sh.name)}</div><div class="m">クラウドに書き込みがあります。同じPDFを入れると戻ります</div></div></div>`;
   }
+  $('#btnLibWatch').classList.toggle('hidden', Cloud.mode!=='cf');
   $('#bookList').innerHTML = h || `<p class="note">まだ問題集がありません。「＋ 問題集のPDFを入れる」から追加してください。</p>`;
-  $('#saveNote').innerHTML = (Cloud.db ? '書き込み・丸つけ・記録は、この端末と<b>クラウド（ログイン中のアカウント）</b>に自動保存されます。' : '書き込み・丸つけ・記録は<b>この端末</b>に保存されます。')
-    + ' PDF本体はこの端末だけに保存されます。消えた場合も、同じPDFを入れ直せば書き込みが戻ります。念のため、ときどき ⋯ メニューの「バックアップを保存」をしてください。';
+  $('#saveNote').innerHTML = Cloud.mode==='cf'
+    ? '書き込み・丸つけ・記録・PDFは、この端末と<b>家族専用のクラウド（Cloudflare）</b>に自動保存されます。別の端末でも、パスコードを入れれば同じ続きから使えます。'
+    : (Cloud.db ? '書き込み・丸つけ・記録は、この端末と<b>クラウド（ログイン中のアカウント）</b>に自動保存されます。' : '書き込み・丸つけ・記録は<b>この端末</b>に保存されます。')
+      + ' PDF本体はこの端末だけに保存されます。消えた場合も、同じPDFを入れ直せば書き込みが戻ります。念のため、ときどき ⋯ メニューの「バックアップを保存」をしてください。';
   refreshDue();
 }
 $('#bookList').onclick=async e=>{
@@ -1256,6 +1372,7 @@ $('#filePdf').onchange=async e=>{
       await store.put('books', id, {...(exist||{}), id, name: exist?.name || name, pages:pdf.numPages, aspects, added: exist?.added || Date.now(), lastOpened:Date.now()});
       pdf.destroy();
       const sh=getShared(id); if(!sh.name){ sh.name=name; sh.pages=aspects.length; saveShared(id); }
+      pushBookToCloud(id, buf);
       last=id;
     }catch(err){ console.warn(err); toast(`「${f.name}」は開けませんでした（パスワード付きや壊れたPDFの可能性）`, 5000); }
   }
@@ -1263,9 +1380,26 @@ $('#filePdf').onchange=async e=>{
 };
 
 /* ================= open book ================= */
+async function ensureLocalBook(id){
+  let meta=await store.get('books', id), file=await store.get('files', id);
+  if(meta && file) return true;
+  if(Cloud.mode!=='cf') return false;
+  toast('クラウドからPDFを取り寄せています…', 20000);
+  const buf=await Cloud.downloadPdf(id); if(!buf){ toast('クラウドにこのPDFがありません'); return false; }
+  try{
+    const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf.slice(0)), ...PDF_OPTS}).promise;
+    const aspects=[]; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const vp=pg.getViewport({scale:1}); aspects.push(vp.height/vp.width); }
+    pdf.destroy();
+    const cb=await Cloud.get(`bk_${id}`);
+    const name=cb?.name || getShared(id).name || 'PDF';
+    await store.put('files', id, buf);
+    await store.put('books', id, {...(meta||{}), id, name, pages:aspects.length, aspects, added:Date.now(), lastOpened:Date.now()});
+    toast('取り寄せました', 1200); return true;
+  }catch(e){ console.warn(e); toast('PDFを開けませんでした'); return false; }
+}
 async function openBook(id){
+  if(!(await ensureLocalBook(id))){ toast('PDFが見つかりません。もう一度入れてください'); return; }
   const meta=await store.get('books', id); const file=await store.get('files', id);
-  if(!meta || !file){ toast('PDFが見つかりません。もう一度入れてください'); return; }
   showScreen('main'); $('#pages').innerHTML='<div class="loading">ひらいています…</div>';
   $('#bookTitle').textContent=meta.name;
   try{
@@ -1283,6 +1417,7 @@ async function openBook(id){
   requestAnimationFrame(()=>scrollToPage(state.curPage));
   refreshDue(); renderStats();
   if(state.memoOpen) showMemoFor(state.curPage);
+  sendCur(); renderViewBar();
   syncBookFromCloud(id);
 }
 
@@ -1434,7 +1569,7 @@ function dragHandle(el, onMove){
 dragHandle($('#memo .mhead'), (b,dx,dy)=>({...b, x:b.x+dx, y:b.y+dy}));
 dragHandle($('#memoResize'), (b,dx,dy)=>({...b, w:Math.max(220,b.w+dx), h:Math.max(170,b.h+dy)}));
 const memoT={
-  getW:()=>memoW, tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
+  getW:()=>memoW, liveInfo:()=>({area:'memo', p:memoPage}), tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
   canDraw:()=>state.memoOpen && !!state.book, scroller:()=>$('#memoBody'),
   items:()=>memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
   addStroke(item){ const p=memoPage; memoItems(p).push(item); drawItem(memoCv.getContext('2d'), item, memoCv.width/10000); saveInk(p);
@@ -1560,6 +1695,127 @@ async function editRewards(){
 }
 $('#btnCoin').onclick=openReward;
 
+/* ================= Cloudflare版：PDFのクラウド保存 ================= */
+async function pushBookToCloud(id, buf){
+  if(Cloud.mode!=='cf') return;
+  const meta=await store.get('books', id); if(!meta) return;
+  Cloud.put(`bk_${id}`, {kind:'book', id, name:meta.name, pages:meta.pages, updated:Date.now()});
+  if(!buf) buf=await store.get('files', id); if(!buf) return;
+  const ok=await Cloud.uploadPdf(id, buf, meta.name);
+  if(ok) toast(`☁️「${meta.name}」をクラウドに保存しました`, 2200);
+}
+async function pushAllBooksToCloud(){
+  if(Cloud.mode!=='cf') return;
+  for(const [id] of await store.all('files')){ if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
+}
+
+/* ================= パスコード画面 ================= */
+let loginP=null;
+function showLogin(){
+  if(loginP) return loginP;
+  const el=$('#login'); el.classList.remove('hidden'); let code='';
+  const dots=()=>{ $('#pinDots').innerHTML=[0,1,2,3].map(i=>`<span class="${i<code.length?'on':''}"></span>`).join(''); };
+  dots(); $('#pinMsg').textContent='';
+  loginP=new Promise(res=>{
+    const submit=async()=>{
+      $('#pinMsg').textContent='たしかめています…';
+      let j={}, st=0; try{ const r=await api('api/login',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({pin:code})}); st=r.status; j=await r.json(); }catch{ j={error:'net'}; }
+      if(j.ok){ el.classList.add('hidden'); loginP=null; res(true); return; }
+      code=''; dots(); el.querySelector('.pinbox').animate([{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'translateX(0)'}],{duration:240});
+      $('#pinMsg').textContent = j.error==='locked' ? `まちがいが続いたので、${Math.ceil(j.wait/60)}分まってください`
+        : j.error==='locked_today' ? '今日はこれ以上ためせません。あした試してください'
+        : j.error==='net' ? 'つながりません。電波を確かめてください'
+        : j.wait ? `ちがいます。${Math.ceil(j.wait/60)}分まってください` : `ちがいます（あと${j.left}回で、しばらく入れなくなります）`;
+    };
+    el.querySelector('.keys').onclick=e=>{
+      const b=e.target.closest('button'); if(!b) return;
+      if(b.dataset.k==='del'){ code=code.slice(0,-1); dots(); return; }
+      if(code.length>=4) return; code+=b.dataset.k; dots(); if(code.length===4) submit();
+    };
+  });
+  return loginP;
+}
+function showSetupNeeded(){
+  $('#login').classList.remove('hidden');
+  $('#login .pinbox').innerHTML=`<h1>🔧 もう少しで使えます</h1><p class="note" style="font-size:15px">Cloudflareの設定で、Worker「tokinote」のシークレット <b>APP_PIN</b> に4けたのパスコードを登録してください。登録したら、このページを開き直します。</p>`;
+  return new Promise(()=>{});
+}
+
+/* ================= 見守りモード（別の端末で、子どもの画面を見る） ================= */
+function renderViewBar(){
+  const v=$('#viewBar'); if(!v) return;
+  if(!state.viewOnly){ v.classList.add('hidden'); return; }
+  v.classList.remove('hidden');
+  const me=state.learners.find(l=>l.id===state.learner)?.name||'';
+  const c=state.liveCur?.[state.learner];
+  const fresh = c && Date.now()-c.at < 10*60000;
+  $('#viewText').innerHTML = `👀 <b>${esc(me)}</b> を見守り中` + (state.book? ` ・ ${esc(state.book.name)}` : '') +
+    (c ? ` ・ 今 <b>${c.p+1}</b>ページ${fresh?'':'（しばらく動きなし）'}` : ' ・ まだ開いていません');
+  $('#viewFollow').classList.toggle('on', !!state.viewFollow);
+}
+async function chooseViewLearner(){
+  if(Cloud.mode!=='cf'){ toast('見守りは、Cloudflare版で使えます'); return; }
+  const L = await openSheet(`<h3>👀 だれを見守りますか？</h3><p class="note" style="margin-bottom:12px">この端末では書きこめません。子どもが書いた線が、ここにすぐ表示されます。</p>
+    <div class="grid2">${state.learners.map(l=>`<button class="btn sub" data-l="${l.id}">${esc(l.name)}</button>`).join('')}</div>`,
+    close=>$('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>close(b.dataset.l)));
+  if(L) enterView(L);
+}
+async function enterView(L){
+  state.viewOnly=true; state.viewFollow=true; state.myLearner=state.learner; state.learner=L;
+  document.body.classList.add('viewing'); setMemo(false);
+  await loadAllForLearner(); await syncLearnerFromCloud();
+  Live.send({t:'hello'});
+  const c=state.liveCur?.[L];
+  if(c?.b) await followTo(c); else { showScreen('main'); $('#pages').innerHTML='<div class="loading">まだ問題集を開いていません。開くと、ここに表示されます。</div>'; state.book=null; }
+  renderViewBar();
+}
+async function exitView(){
+  state.viewOnly=false; document.body.classList.remove('viewing');
+  state.learner=state.myLearner||state.learner; state.book=null;
+  await loadAllForLearner(); showScreen('lib'); renderLib(); renderViewBar();
+}
+async function followTo(c){
+  if(!state.viewOnly || c.L!==state.learner) return;
+  if(state.book?.id!==c.b) await openBook(c.b);
+  if(state.viewFollow && state.book?.id===c.b && state.curPage!==c.p) scrollToPage(c.p);
+  if(state.memoOpen) showMemoFor(c.p);
+}
+function viewLiveCanvas(pg){
+  if(!pg.vlive){ pg.vlive=document.createElement('canvas'); pg.vlive.style.pointerEvents='none'; }
+  if(pg.vlive.width!==pg.inkCv.width){ pg.vlive.width=pg.inkCv.width; pg.vlive.height=pg.inkCv.height; pg.vlive.style.width=pg.w+'px'; pg.vlive.style.height=pg.h+'px'; }
+  if(pg.vlive.parentNode!==pg.el) pg.el.insertBefore(pg.vlive, pg.ov);
+  return pg.vlive;
+}
+function clearViewLive(p){ const pg=state.pages[p]; if(pg?.vlive){ pg.vlive.getContext('2d').clearRect(0,0,pg.vlive.width,pg.vlive.height); } }
+async function onLiveMsg(m){
+  if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
+  if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
+  if(!state.viewOnly || m.L && m.L!==state.learner) return;
+  if(m.t==='page' && state.book?.id===m.b){
+    state.ink.set(m.p, m.rec); store.put('ink', inkKey(m.b,m.p), m.rec).catch(()=>{});
+    const pg=state.pages[m.p]; if(pg?.rendered){ drawInk(pg); clearViewLive(m.p); }
+    if(state.memoOpen && memoPage===m.p) drawMemo();
+  } else if(m.t==='live' && state.book?.id===m.b && m.item){
+    if(m.area==='memo'){ if(state.memoOpen && memoPage===m.p){ drawAll(memoCv, memoItems().concat([m.item])); } return; }
+    const pg=state.pages[m.p]; if(!pg?.rendered) return;
+    const cv=viewLiveCanvas(pg), ctx=cv.getContext('2d'); ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,cv.width,cv.height);
+    drawOnPage(ctx, [m.item], pg.g, pg.px);
+  } else if(m.t==='stats'){
+    state.stats=m.stats; renderStats(); updateCoins();
+  } else if(m.t==='learn'){
+    state.learnAll.set(m.b, m.learn); store.put('learn', learnKey(m.b), m.learn).catch(()=>{});
+    if(state.book?.id===m.b) state.pages.forEach(renderOverlay);
+  } else if(m.t==='shared'){
+    const old=JSON.stringify(state.sharedAll.get(m.b)?.rot||{});
+    state.sharedAll.set(m.b, m.shared); store.put('shared', m.b, m.shared).catch(()=>{});
+    if(state.book?.id===m.b){ state.shared=m.shared; if(JSON.stringify(m.shared.rot||{})!==old) relayout(); else state.pages.forEach(renderOverlay); }
+  }
+}
+$('#viewFollow').onclick=()=>{ state.viewFollow=!state.viewFollow; renderViewBar(); const c=state.liveCur?.[state.learner]; if(state.viewFollow && c) followTo(c); };
+$('#viewExit').onclick=()=>exitView();
+$('#btnLibWatch').onclick=()=>chooseViewLearner();
+
+
 /* ================= boot ================= */
 guardStylus($('#pages'));
 async function boot(){
@@ -1569,9 +1825,10 @@ async function boot(){
   const z=await store.get('meta','zoom'); if(z) state.zoom=z;
   const t=await store.get('meta','tool'); if(t && TOOLS.some(x=>x[0]===t)) state.tool=t;
   await loadAllForLearner();
-  renderCloud(); renderTools(); renderMaskBtn(); showScreen('lib'); await renderLib();
-  await Cloud.init();
-  if(Cloud.db){ await syncCfgFromCloud(); await syncLearnerFromCloud(); renderLib(); }
+  renderCloud(); renderTools(); renderMaskBtn(); showScreen('lib');
+  await Cloud.init();            // Cloudflare版なら、ここでパスコード画面が出る
+  await renderLib();
+  if(Cloud.db){ await syncCfgFromCloud(); await syncLearnerFromCloud(); renderLib(); pushAllBooksToCloud(); }
 }
 boot();
 </script>

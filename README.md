@@ -3,9 +3,9 @@
 中学受験の問題集PDFを、iPadで手書きして解くための学習アプリです。
 解く → ⭕🔺❌で丸つけ → 間違えた問題だけを日をあけて出し直す、までを1つにまとめています。
 
-- 種類：ビルド不要の静的Webアプリ（`index.html` 1枚と、同梱ライブラリ）
-- 想定端末：iPad（Safari / Claudeアプリ）＋ Apple Pencil。PCのブラウザでも動きます
-- 現在の公開先：claude.ai のアーティファクト（非公開）
+- 種類：画面はビルド不要の静的Webアプリ（`public/index.html`）。保存と見守りは Cloudflare Workers ＋ Durable Objects
+- 想定端末：iPad（Safari）＋ Apple Pencil。PCやスマホのブラウザでも動きます
+- 公開先：Cloudflare Workers（家族のパスコード4けたで入る）。claude.ai のアーティファクトでも動きます（見守りなし）
 
 ## 機能
 
@@ -21,40 +21,59 @@
 | メモ | 📝で出す計算用紙。移動・大きさ変更ができ、ページごとに保存 |
 | ごほうび | 丸つけと勉強時間でコインがたまり、ごほうびと交換（おうちの人のパスコード）。100コインごとにシール |
 | 記録 | 今日の⭕🔺❌、勉強時間、連続日数。子ども2人分を切り替え |
+| 見守り | 別の端末で、子どもが書いている線・丸つけ・メモ・開いているページをリアルタイムに表示（Cloudflare版） |
 | その他 | ツールバーを隠す、全ページの書き込みを消して解き直し、バックアップの保存と復元 |
 
 ## ファイル構成
 
 ```
-index.html              アプリ本体（HTML・CSS・JavaScript）
-vendor/pdf.min.mjs      PDF.js 4.10.38（legacy版）
-vendor/pdf.worker.min.mjs
-cmaps.json              日本語PDF用の文字対応表（PDF.js の cmaps を1ファイルにまとめたもの）
-licenses/               同梱ライブラリのライセンス
+public/index.html          アプリ本体（HTML・CSS・JavaScript）
+public/vendor/             PDF.js 4.10.38（legacy版）
+public/cmaps.json          日本語PDF用の文字対応表（PDF.js の cmaps を1ファイルにまとめたもの）
+worker/index.js            Cloudflare Worker と Durable Object「Family」
+wrangler.jsonc             Cloudflare の設定
+licenses/                  同梱ライブラリのライセンス
 ```
 
 ## データの保存先
 
-| データ | 保存先 |
-|---|---|
-| 問題集のPDF本体 | 各端末のブラウザ（IndexedDB）だけ。外には送らない |
-| 書き込み・丸つけ・メモ・問題わく・穴うめ・回転 | 端末（IndexedDB）＋ claude.ai アーティファクトのDB（ログイン中ユーザーの非公開領域 `data/users/<id>/`） |
-| 記録・ごほうび・コイン | 同上 |
-| おうちの人のパスコード | 端末だけ（端末間で共有しない） |
+| データ | Cloudflare版 | claude.ai版 |
+|---|---|---|
+| 問題集のPDF | 端末（IndexedDB）＋ Durable Object（1MBずつに分けて保存、95MBまで） | 端末だけ |
+| 書き込み・丸つけ・メモ・問題わく・穴うめ・回転・記録・ごほうび | 端末 ＋ Durable Object | 端末 ＋ アーティファクトDB（ユーザーごとの非公開領域） |
+| おうちの人のパスコード（ごほうび交換用） | 端末だけ | 端末だけ |
 
-- PDFは SHA-256 のハッシュで識別します。端末のデータが消えても、同じPDFを入れ直せば書き込みが戻ります。
-- claude.ai の外（Cloudflare Pages など）に置いた場合、クラウド保存は自動で無効になり、端末保存だけで動きます。この場合は ⋯ メニューの「バックアップを保存」を定期的に使ってください。
+- PDFは SHA-256 のハッシュで識別します。同じPDFなら、どの端末でも同じ書き込みにつながります。
+- どちらの場所でもない環境（ただの静的サーバー）では、端末保存だけで動きます。⋯ メニューの「バックアップを保存」を定期的に使ってください。
 
-## 動かし方
+## Cloudflare への置き方（初回だけ・PCで）
 
-ビルドは不要です。任意の静的サーバーで配信します。
+1. Cloudflare ダッシュボード → Workers & Pages → 作成 → 「Gitリポジトリをインポート」で `avenirplus/tokinote` を選ぶ
+   - 設定はそのままでOK（`wrangler.jsonc` を読み込んで `npx wrangler deploy` が走ります）
+2. できた Worker「tokinote」→ 設定 → 変数とシークレット → **シークレット** `APP_PIN` に4けたの数字を登録して、デプロイし直す
+3. 表示された `https://tokinote.<アカウント名>.workers.dev` を iPad で開き、パスコードを入れる
+
+以後は、GitHub の `main` を更新すると自動で反映されます。
+
+### 入口のパスコード（APP_PIN）について
+
+- パスコードは Cloudflare のシークレットにだけ置きます。ソースやチャットには書きません。
+- まちがいが5回続くと、その回線からは1分、2分、4分…（最大1日）入れなくなります。全体でも1日100回までです。
+- 一度入れた端末は180日間ログインしたままです。パスコードを変えたときは、Worker の `api/logout-all` で全端末をログアウトできます。
+
+### 無料枠の目安
+
+Durable Objects（SQLite）は Workers Free プランで使えます。上限を超えた場合はエラーで止まるだけで、課金はされません。家庭で使う量なら無料枠に収まる見込みです。
+
+## 動かし方（開発）
 
 ```
-python3 -m http.server 8000
-# → http://localhost:8000/ を開く
+npm i -g wrangler        # または npx wrangler
+echo "APP_PIN=1234" > .dev.vars
+wrangler dev             # → http://localhost:8787/
 ```
 
-`file://` で直接開くと、PDF.js のワーカーや `cmaps.json` が読めないため動きません。
+画面だけを確かめるなら `cd public && python3 -m http.server 8000` でも動きます（端末保存のみ）。
 
 ## 設計メモ
 
@@ -62,6 +81,8 @@ python3 -m http.server 8000
 - **復習の間隔**：`INTERVALS = [3, 7, 30]`（日）。❌🔺のあと⭕が続くごとに次の間隔へ進み、最後まで⭕で卒業です。
 - **コイン**：⭕10・🔺5・❌2（同じ問題は1日1回まで）、復習⭕15、卒業30、10分勉強ごとに10（1日60まで）。丸つけの記録から毎回計算し直すため、取り消すと減ります。
 - **Apple Pencil**：Pencilを初めて検出すると「Pencilで書く・指はスクロール」に自動で切り替わります（⋯で変更可）。
+- **見守り**：WebSocket（Durable Object のハイバネーションAPI）で中継します。書いている途中の線は0.08秒ごと、書き終えたページは丸ごと送ります。見守る端末は書き込めません（保存も送信もしない）。
+- **API**：`/api/health`・`/api/login`・`/api/kv`（キーごとのJSON）・`/api/kv/list`・`/api/pdf/:id`・`/api/live`（WebSocket）。`/api/health` と `/api/login` 以外はログインが必要です。
 
 ## 未対応（候補）
 
