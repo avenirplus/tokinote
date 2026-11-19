@@ -80,7 +80,7 @@ body.fd #memoStage{touch-action:none}
 #tools.min #toolsMini{display:flex;outline:2px solid var(--accent);background:var(--accent-soft)}
 #row2{display:flex;align-items:center;gap:2px}
 @media (min-width:1100px){ #tools{flex-direction:row} #row2{margin-left:6px;border-left:1px solid var(--line);padding-left:6px} }
-.tool{width:clamp(36px,calc((100vw - 52px)/9),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+.tool{width:clamp(34px,calc((100vw - 52px)/10),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
 .tool small{font-size:10px;white-space:nowrap;color:var(--sub);margin-top:3px}
 .tool.on{background:var(--accent-soft);outline:2px solid var(--accent)}
 .sep{width:1px;height:38px;background:var(--line);margin:0 4px}
@@ -343,7 +343,7 @@ const STAMP_C = {o:'#e5002d', t:'#f08c00', x:'#2f6fe0'};
 const STAMP_ICON = {o:'⭕', t:'🔺', x:'❌'};
 const REASONS = ['計算ミス','読みまちがい','知らなかった','時間切れ'];
 const TOOLS = [['hand','✋','見る'],['pen','✏️','ペン'],['marker','🖍️','マーカー'],['eraser','🧽','消す'],
-  ['o','⭕','まる'],['t','🔺','おしい'],['x','❌','ばつ'],['region','🔲','問題わく'],['mask','⬛','穴うめ']];
+  ['o','⭕','まる'],['t','🔺','おしい'],['x','❌','ばつ'],['region','🔲','問題わく'],['mask','⬛','穴うめ'],['gap','↕️','すきま']];
 const STORES = ['files','books','shared','learn','ink','meta'];
 
 const state = {
@@ -366,8 +366,12 @@ const dateKey = (t=Date.now()) => { const d=new Date(t); return d.getFullYear()+
 const endOfDay = (t=Date.now()) => { const d=new Date(t); d.setHours(23,59,59,999); return d.getTime(); };
 const esc = s => String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const withTimeout = (p, ms) => Promise.race([p, new Promise((_,rej)=>setTimeout(()=>rej({code:'timeout'}), ms))]);
-const timers = new Map();
-function debounce(key, fn, ms){ clearTimeout(timers.get(key)); timers.set(key, setTimeout(()=>{ timers.delete(key); fn(); }, ms)); }
+const timers = new Map(), timerFns = new Map();
+// アプリを閉じる・切りかえるときは、待っている保存をすぐ実行する
+function flushDebounced(){ for(const [k,t] of timers){ clearTimeout(t); const f=timerFns.get(k); timers.delete(k); try{ f?.(); }catch{} } try{ Cloud.flush(); }catch{} }
+addEventListener('pagehide', flushDebounced);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') flushDebounced(); });
+function debounce(key, fn, ms){ timerFns.set(key, fn); clearTimeout(timers.get(key)); timers.set(key, setTimeout(()=>{ timers.delete(key); fn(); }, ms)); }
 let toastT;
 function toast(msg, ms=2600){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'), ms); }
 
@@ -547,8 +551,8 @@ function getShared(b){ let s=state.sharedAll.get(b); if(!s){ s=emptyShared(); st
 function saveLearn(b){
   if(state.viewOnly) return;
   const l=getLearn(b); l.updated=Date.now(); const L=state.learner;
+  store.put('learn', learnKey(b,L), l).catch(()=>{});      // 端末にはすぐ保存
   debounce('learn'+L+b, ()=>{
-    store.put('learn', learnKey(b,L), l).catch(()=>{});
     Cloud.put(`ln_${L}_${b}`, {...l, kind:'learn', book:b, learner:L});
     Live.send({t:'learn', L, b, learn:l});
   }, 400);
@@ -557,8 +561,8 @@ function saveLearn(b){
 function saveShared(b){
   if(state.viewOnly) return;
   const s=getShared(b); s.updated=Date.now();
+  store.put('shared', b, s).catch(()=>{});
   debounce('shared'+b, ()=>{
-    store.put('shared', b, s).catch(()=>{});
     Cloud.put(`sh_${b}`, {...s, kind:'shared', book:b});
     Live.send({t:'shared', b, shared:s});
   }, 400);
@@ -567,16 +571,17 @@ function getInk(p){ let r=state.ink.get(p); if(!r){ r={items:[], updated:0}; sta
 function saveInk(p){
   if(state.viewOnly) return;
   const r=getInk(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
-  Live.send({t:'page', L, b, p, rec:{items:r.items, memo:r.memo||[], updated:r.updated}});
+  Live.send({t:'page', L, b, p, rec:{items:r.items, memo:r.memo||[], gaps:r.gaps||[], updated:r.updated}});
+  store.put('ink', inkKey(b,p,L), r).catch(()=>{});
   debounce('ink'+L+b+p, ()=>{
-    store.put('ink', inkKey(b,p,L), r).catch(()=>{});
-    Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
+    Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[], gaps:r.gaps||[]});
   }, 600);
 }
 function saveStats(){
   if(state.viewOnly) return;
   state.stats.updated=Date.now(); const L=state.learner, st=state.stats;
-  debounce('stats'+L, ()=>{ store.put('meta','stats|'+L, st).catch(()=>{}); Cloud.put(`st_${L}`, {...st, kind:'stats'}); Live.send({t:'stats', L, stats:st}); }, 1500);
+  store.put('meta','stats|'+L, st).catch(()=>{});
+  debounce('stats'+L, ()=>{ Cloud.put(`st_${L}`, {...st, kind:'stats'}); Live.send({t:'stats', L, stats:st}); }, 1500);
 }
 function saveMeta(){
   store.put('meta','settings', state.settings).catch(()=>{});
@@ -640,12 +645,13 @@ async function syncBookFromCloud(b){
     const p = +id.slice(1); if(!Number.isFinite(p)) continue; seen.add(p);
     const local = state.ink.get(p);
     if(!local || (data.updated||0) > (local.updated||0)){
-      state.ink.set(p, {items:data.items||[], memo:data.memo||[], updated:data.updated||0});
+      const oldG=JSON.stringify(state.ink.get(p)?.gaps||[]);
+      state.ink.set(p, {items:data.items||[], memo:data.memo||[], gaps:data.gaps||[], updated:data.updated||0});
       store.put('ink', inkKey(b,p,L), state.ink.get(p)).catch(()=>{});
-      const pg = state.pages[p]; if(pg?.rendered) drawInk(pg); changed=true;
-    } else if((local.updated||0) > (data.updated||0)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:local.updated, items:local.items, memo:local.memo||[]});
+      if(JSON.stringify(data.gaps||[])!==oldG) relayoutPage(p); else { const pg = state.pages[p]; if(pg?.rendered) drawInk(pg); } changed=true;
+    } else if((local.updated||0) > (data.updated||0)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:local.updated, items:local.items, memo:local.memo||[], gaps:local.gaps||[]});
   }
-  for(const [p,r] of state.ink) if(!seen.has(p) && (r.items.length||r.memo?.length)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[]});
+  for(const [p,r] of state.ink) if(!seen.has(p) && (r.items.length||r.memo?.length)) Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[], gaps:r.gaps||[]});
   // アドバイス層
   const adocs = await Cloud.list(`ln_${L}_${b}/adv`);
   if(state.book?.id!==b || state.learner!==L) return;
@@ -836,7 +842,7 @@ function onDown(e, el, T){
   state.lastAct=Date.now();
   if(e.pointerType==='pen') notePen();
   if(e.pointerType==='touch' && e.isPrimary){ touches.clear(); pan=null; }   // 1本目の指＝前の記録は古い
-  if(cur && cur.id!==e.pointerId && (e.pointerType!=='touch' || cur.pointerType==='touch')){ const c=cur; cur=null; finishCur(c,false); } // 前の線が終わっていなければ確定
+  if(cur && cur.id!==e.pointerId && (e.pointerType!=='touch' || cur.pointerType==='touch')){ const c=cur; cur=null; if(c.kind!=='tapTool') finishCur(c,false); } // スタンプ中に2本目の指＝ピンチなので取り消す // 前の線が終わっていなければ確定
   if(e.pointerType==='touch'){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
@@ -862,8 +868,9 @@ function startCur(e, el, T, tool){
     el.appendChild(live); scheduleLive();
   } else if(tool==='eraser'){
     cur={kind:'erase', id:e.pointerId, pointerType:e.pointerType, el, T, removed:[]}; eraseAt(cur, pt);
-  } else if(tool==='o'||tool==='t'||tool==='x'){
-    T.stamp?.(pt, tool, e);
+  } else if(tool==='gap'||tool==='o'||tool==='t'||tool==='x'){
+    // スタンプ・すきまは「指を離したとき」に決める（ピンチの1本目で押されないように）
+    cur={kind:'tapTool', id:e.pointerId, pointerType:e.pointerType, el, T, tool, pt, x:e.clientX, y:e.clientY, moved:false};
   } else if((tool==='region'||tool==='mask') && T.rect){
     const rb=document.createElement('div'); rb.className='rubber '+tool; T.ovEl().appendChild(rb);
     cur={kind:'rect', id:e.pointerId, pointerType:e.pointerType, el, T, x0:pt.x, y0:pt.y, rb, tool, last:pt}; setRect(rb, T.dispRect({x:pt.x,y:pt.y,w:0,h:0}));
@@ -884,23 +891,25 @@ function onMove(e){
     scheduleLive();
     if(cur.T.liveInfo && Cloud.mode==='cf') Live.sendLive({t:'live', L:state.learner, b:state.book?.id, ...cur.T.liveInfo(), item:cur.item});
   } else if(cur.kind==='erase'){ for(const ev of evs) eraseAt(cur, toNorm(ev,cur.el,cur.T)); }
+  else if(cur.kind==='tapTool'){ if(Math.hypot(e.clientX-cur.x, e.clientY-cur.y)>14) cur.moved=true; }
   else if(cur.kind==='rect'){ const pt=toNorm(e,cur.el,cur.T); cur.last=pt; setRect(cur.rb, cur.T.dispRect(normRect(cur.x0,cur.y0,pt.x,pt.y))); }
 }
 function onUp(e, cancel){
   if(e.pointerType==='touch'){ touches.delete(e.pointerId); if(touches.size<2) pan=null; }
   if(tapC && tapC.id===e.pointerId){ const t=tapC; tapC=null; if(!cancel && Date.now()-t.t<500) t.T.tap?.(toNorm(e,t.el,t.T), e); }
   if(!cur || cur.id!==e.pointerId) return;
-  const c=cur; cur=null; finishCur(c, cancel);
+  const c=cur; cur=null; finishCur(c, cancel, e);
 }
-function finishCur(c, cancel){
+function finishCur(c, cancel, ev){
   if(c.kind==='stroke' && c.T.liveInfo && Cloud.mode==='cf') Live.endLive(c.T.liveInfo());
   try{
     if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return; c.T.addStroke(c.item); }
     else if(c.kind==='erase'){ if(c.removed.length) c.T.commitErase(c.removed); }
+    else if(c.kind==='tapTool'){ if(cancel || c.moved || c.aborted) return; if(c.tool==='gap') c.T.gap?.(c.pt); else c.T.stamp?.(c.pt, c.tool, {clientX:c.x, clientY:c.y}); }
     else if(c.kind==='rect'){ c.rb.remove(); const r=normRect(c.x0,c.y0,c.last.x,c.last.y); if(!cancel && r.w>120 && r.h>80) c.T.rect(c.tool, r); }
   }catch(err){ console.warn(err); }
 }
-function abortCur(){ if(!cur) return; if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
+function abortCur(){ if(!cur) return; if(cur.kind==='tapTool'){ cur=null; return; } if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
 function eraseAt(c, pt){
   const items=c.T.items(); let ch=false;
   for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
@@ -918,12 +927,12 @@ function guardStylus(el){
 let io=null;
 function pixelRatioFor(w,h){ let r=Math.min(window.devicePixelRatio||1, 2); const max=9e6; if(w*h*r*r>max) r=Math.sqrt(max/(w*h)); return r; }
 /* --- 回転：書き込みは「元の向き」の座標で保存し、表示の時だけ回す --- */
-function geomOf(a, rot){
+function geomOf(a, rot, gs=0){
   const H=10000*a; let m, Dw, Dh;
   if(rot===90){ m=[0,1,-1,0,H,0]; Dw=H; Dh=10000; }
   else if(rot===180){ m=[-1,0,0,-1,10000,H]; Dw=10000; Dh=H; }
   else if(rot===270){ m=[0,-1,1,0,0,10000]; Dw=H; Dh=10000; }
-  else { rot=0; m=[1,0,0,1,0,0]; Dw=10000; Dh=H; }
+  else { rot=0; m=[1,0,0,1,0,0]; Dw=10000; Dh=H+gs; }
   return {rot, a, H, m, Dw, Dh};
 }
 const toD=(g,x,y)=>({x:g.m[0]*x+g.m[2]*y+g.m[4], y:g.m[1]*x+g.m[3]*y+g.m[5]});
@@ -936,6 +945,93 @@ function drawOnPage(ctx, items, g, k, ox=0, oy=0){
     else { const m=g.m; ctx.setTransform(k*m[0],k*m[1],k*m[2],k*m[3],k*m[4]-ox,k*m[5]-oy); drawItem(ctx, it, 1); }
   }
   ctx.setTransform(1,0,0,1,0,0);
+}
+/* --- すきま（問題と問題のあいだに書くスペースを足す）：ページを上下に分けて、方眼の白いスペースを入れる ---
+   すきまは子どもごと・ページごと（ink の gaps）。書き込みは「すきま込みの座標」、問題わく・穴うめは元のページの座標で持つ */
+const pageGaps = p => pageRot(p) ? [] : ((state.ink.get(p)?.gaps)||[]).slice().sort((a,b)=>a.y-b.y);
+function b2e(g, y){ let o=0; for(const q of g.gaps||[]){ if(q.y<=y) o+=q.h; else break; } return y+o; }
+function e2b(g, y){ let o=0; for(const q of g.gaps||[]){ const s=q.y+o; if(y<s) break; if(y<s+q.h) return null; o+=q.h; } return y-o; }
+function e2bc(g, y){ let o=0; for(const q of g.gaps||[]){ const s=q.y+o; if(y<s) break; if(y<s+q.h) return q.y; o+=q.h; } return y-o; }
+const rectBE = (g, r) => { if(!g.gaps?.length) return r; const y1=b2e(g,r.y), y2=b2e(g,r.y+r.h); return {...r, y:y1, h:y2-y1}; };
+function gapSegments(g){
+  const segs=[]; let b0=0, off=0;
+  for(const q of g.gaps||[]){ segs.push({b0, b1:q.y, off}); off+=q.h; b0=q.y; }
+  segs.push({b0, b1:g.H, off}); return segs;
+}
+// PDFを（すきまがあれば区切って）描く。k=キャンバスの1単位あたりのピクセル、ox/oy=キャンバスのずらし
+async function paintPdf(ctx, page, rotation, g, k, ox, oy, cw, ch, setTask, alive){
+  if(!alive()) return;
+  const vp1=page.getViewport({scale:1, rotation}); const scale=k*g.Dw/vp1.width;
+  ctx.fillStyle='#fff'; ctx.fillRect(0,0,cw,ch);
+  if(!g.gaps?.length){
+    const vp=page.getViewport({scale, rotation, offsetX:-ox, offsetY:-oy});
+    const t=page.render({canvasContext:ctx, viewport:vp}); setTask(t); await t.promise; return;
+  }
+  for(const s of gapSegments(g)){
+    if(!alive()) return;
+    const y0=(s.b0+s.off)*k-oy, y1=(s.b1+s.off)*k-oy; if(y1<0 || y0>ch) continue;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, y0, cw, y1-y0); ctx.clip();
+    const vp=page.getViewport({scale, rotation, offsetX:-ox, offsetY:s.off*k-oy});
+    const t=page.render({canvasContext:ctx, viewport:vp}); setTask(t); await t.promise; ctx.restore();
+    if(!alive()) return;
+  }
+  if(!alive()) return;    // 古い描画（拡大の前の大きさ）が、新しいキャンバスに描かないように
+  let off=0;
+  for(const q of g.gaps){
+    const top=(q.y+off)*k-oy, h=q.h*k; off+=q.h; if(top+h<0 || top>ch) continue;
+    ctx.fillStyle='#fbfcff'; ctx.fillRect(0, top, cw, h);
+    ctx.strokeStyle='#e3e8f1'; ctx.lineWidth=1; ctx.beginPath();
+    const step=280*k; for(let y=top+step; y<top+h; y+=step){ ctx.moveTo(0,y); ctx.lineTo(cw,y); } for(let x=(-ox%step+step)%step; x<cw; x+=step){ ctx.moveTo(x,top); ctx.lineTo(x,top+h); } ctx.stroke();
+    ctx.setLineDash([10,8]); ctx.strokeStyle='#9fb4d6'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(0,top+1); ctx.lineTo(cw,top+1); ctx.moveTo(0,top+h-1); ctx.lineTo(cw,top+h-1); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+const itemMinY = it => { if(it.k==='s'){ let m=Infinity; for(let i=1;i<it.p.length;i+=3) m=Math.min(m,it.p[i]); return m; } return it.y; };
+function shiftItem(it, dy){ if(it.k==='s'){ for(let i=1;i<it.p.length;i+=3) it.p[i]+=dy; } else it.y+=dy; }
+function relayoutPage(p){
+  const pg=state.pages[p]; if(!pg) return; const was=pg.rendered;
+  layoutPages(); unrenderPage(pg); if(was) renderPage(pg);
+}
+function applyGapState(p, st){
+  const rec=getInk(p); rec.items=clone(st.items); rec.gaps=clone(st.gaps); saveInk(p);
+  const a=state.adv.get(p); if(a && JSON.stringify(a.items)!==JSON.stringify(st.adv)){ a.items=clone(st.adv); saveAdv(p); }
+  relayoutPage(p);
+}
+async function gapAt(pg, pt){
+  const p=pg.i; if(pageRot(p)){ toast('回転したページには、すきまを入れられません'); return; }
+  const rec=getInk(p); const gaps=pageGaps(p);
+  const snap=()=>({items:clone(rec.items), adv:clone(state.adv.get(p)?.items||[]), gaps:clone(rec.gaps||[])});
+  const before=snap(); const after=snap();
+  const allItems=[...after.items, ...after.adv];
+  let off=0, hit=null, top=0;
+  for(const q of gaps){ const s=q.y+off; if(pt.y>=s && pt.y<s+q.h){ hit=q; top=s; break; } off+=q.h; }
+  if(hit){
+    const r=await openSheet(`<h3>↕️ すきま</h3><div class="grid2" style="margin-bottom:10px"><button class="btn sub" data-a="more">もっと広く</button><button class="btn sub" data-a="less">せまく</button></div>
+      <div class="grid2"><button class="btn red" data-a="del">すきまを消す</button><button class="btn" data-a="0">とじる</button></div>`,
+      close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+    if(!r || r==='0') return;
+    const g=after.gaps.find(q=>q.y===hit.y && q.h===hit.h); const bottom=top+hit.h;
+    if(r==='del'){
+      const inside=allItems.filter(it=>{ const y=itemMinY(it); return y>=top && y<bottom; });
+      if(inside.length && !(await confirmDlg('すきまを消す',`このすきまに書いた ${inside.length} 個の書きこみも消えます。（↶で戻せます）`,'消す',true))) return;
+      after.items=after.items.filter(it=>!inside.includes(it)); after.adv=after.adv.filter(it=>!inside.includes(it));
+      for(const it of [...after.items, ...after.adv]) if(itemMinY(it)>=bottom) shiftItem(it, -hit.h);
+      after.gaps=after.gaps.filter(q=>q!==g);
+    } else {
+      const dh = r==='more' ? Math.round(hit.h*.5) : -Math.min(hit.h-800, Math.round(hit.h/3));
+      if(!dh) return;
+      for(const it of allItems) if(itemMinY(it)>=bottom) shiftItem(it, dh);
+      g.h+=dh;
+    }
+  } else {
+    const yB=e2b(pg.g, pt.y); if(yB==null) return;
+    const H=2600;
+    for(const it of allItems) if(itemMinY(it)>=pt.y) shiftItem(it, H);
+    after.gaps.push({y:Math.round(yB), h:H});
+    toast('↕️ すきまを入れました。すきまをタップすると、広さを変えたり消したりできます', 3000);
+  }
+  after.gaps.sort((a,b)=>a.y-b.y);
+  applyGapState(p, after);
+  pushUndo({undo:()=>applyGapState(p, before), redo:()=>applyGapState(p, after)});
 }
 function buildPages(){
   const host=$('#pages'); host.innerHTML=''; state.pages=[];
@@ -954,7 +1050,7 @@ function buildPages(){
 function layoutPages(){
   const vw=$('#viewer').clientWidth; const base=Math.min(vw-24, 1100);
   state.pages.forEach((pg,i)=>{
-    pg.g=geomOf(state.book.aspects[i]||1.414, pageRot(i));
+    const gaps=pageGaps(i); pg.g=geomOf(state.book.aspects[i]||1.414, pageRot(i), gaps.reduce((s,q)=>s+q.h,0)); pg.g.gaps=gaps;
     // 横向きページは同じ幅に入れると小さくなりすぎるので、縦向きと同じ高さ感にそろえる
     const W=Math.round(base*state.zoom);
     pg.w=W; pg.h=Math.round(W*pg.g.Dh/pg.g.Dw);
@@ -970,9 +1066,7 @@ async function renderPage(pg){
   try{
     const page=await state.pdf.getPage(pg.i+1); if(gen!==pg.gen) return;
     const rotation=((page.rotate||0)+pg.g.rot)%360;
-    const vp1=page.getViewport({scale:1, rotation}); const vp=page.getViewport({scale:cw/vp1.width, rotation});
-    const ctx=pg.pdfCv.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,cw,ch);
-    pg.task=page.render({canvasContext:ctx, viewport:vp}); await pg.task.promise;
+    await paintPdf(pg.pdfCv.getContext('2d'), page, rotation, pg.g, pg.px, 0, 0, cw, ch, t=>pg.task=t, ()=>gen===pg.gen);
   }catch(e){ if(e?.name!=='RenderingCancelledException') console.warn(e); }
   finally{ if(gen===pg.gen) pg.task=null; }
   scheduleDetails();
@@ -998,10 +1092,8 @@ async function renderDetail(pg){
   el.append(pc,ic);
   try{
     const page=await state.pdf.getPage(pg.i+1); if(gen!==pg.dgen || !pg.rendered) return;
-    const rotation=((page.rotate||0)+pg.g.rot)%360, vp1=page.getViewport({scale:1, rotation});
-    const vp=page.getViewport({scale:pg.w*rD/vp1.width, rotation, offsetX:-rect.x*rD, offsetY:-rect.y*rD});
-    const ctx=pc.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,pc.width,pc.height);
-    pg.dtask=page.render({canvasContext:ctx, viewport:vp}); await pg.dtask.promise; pg.dtask=null;
+    const rotation=((page.rotate||0)+pg.g.rot)%360;
+    await paintPdf(pc.getContext('2d'), page, rotation, pg.g, rD*pg.w/pg.g.Dw, rect.x*rD, rect.y*rD, pc.width, pc.height, t=>pg.dtask=t, ()=>gen===pg.dgen && pg.rendered); pg.dtask=null;
   }catch(e){ if(e?.name!=='RenderingCancelledException') console.warn(e); return; }
   if(gen!==pg.dgen || !pg.rendered){ pc.width=pc.height=ic.width=ic.height=0; return; }
   dropDetail(pg); pg.detail={el,pc,ic,rect,r:rD}; pg.el.insertBefore(el, pg.ov); drawDetailInk(pg);
@@ -1021,10 +1113,10 @@ function drawInk(pg){ if(!pg.rendered) return; const ctx=pg.inkCv.getContext('2d
 function renderOverlay(pg){
   if(!pg.rendered) return; const ov=pg.ov; ov.innerHTML=''; const p=pg.i, sh=state.shared, b=state.book.id;
   for(const m of sh.masks){ if(m.p!==p) continue;
-    const d=document.createElement('div'); d.className='mask'+((state.revealAll||state.revealed.has(m.id))?' open':''); setRect(d, rectMap(toD,pg.g,m));
+    const d=document.createElement('div'); d.className='mask'+((state.revealAll||state.revealed.has(m.id))?' open':''); setRect(d, rectMap(toD,pg.g,rectBE(pg.g,m)));
     if(state.tool==='mask') addDel(d, ()=>removeShared('masks', m, p)); ov.appendChild(d); }
   for(const q of sh.problems){ if(q.p!==p) continue;
-    const d=document.createElement('div'); d.className='region'; setRect(d, rectMap(toD,pg.g,q)); const st=problemStatus(b, q.id);
+    const d=document.createElement('div'); d.className='region'; setRect(d, rectMap(toD,pg.g,rectBE(pg.g,q))); const st=problemStatus(b, q.id);
     d.innerHTML=`<span class="badge ${st.cls}">${st.icon} 問${q.n}</span>`;
     if(state.tool==='region') addDel(d, ()=>removeShared('problems', q, p)); ov.appendChild(d); }
   if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k!=='tx') continue;
@@ -1080,8 +1172,10 @@ function pageTarget(pg){
                 redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); saveInk(p); }});
     },
     stamp(pt, m, e){ stampAt(pg, pt, m, e); },
+    gap(pt){ gapAt(pg, pt); },
     rect(kind, r){
       const b=state.book.id, sh=state.shared;
+      if(pg.g.gaps?.length){ const y1=e2bc(pg.g,r.y), y2=e2bc(pg.g,r.y+r.h); if(y2-y1<80){ toast('すきまの中には作れません'); return; } r={...r, y:Math.round(y1), h:Math.round(y2-y1)}; }
       if(kind==='region'){
         const n=Math.max(0,...sh.problems.map(q=>q.n||0))+1;
         const q={id:uid('q'), p, ...r, n};
@@ -1101,7 +1195,8 @@ function pageTarget(pg){
       if(state.viewOnly && state.advTool==='avid'){ advVideoAt(pg, pt); return; }
       if(state.viewOnly && (state.advTool==='atext'||state.advTool==='aimg')){ advTextAt(pg, pt, e); return; }
       if(e && !state.advHidden){ const h=advHit(pg,e); if(h?.k==='im'){ imgURL(h.img).then(u=>u&&showLightbox(u)); return; } }
-      const hit = state.shared.masks.filter(m=>m.p===p && pt.x>=m.x && pt.x<=m.x+m.w && pt.y>=m.y && pt.y<=m.y+m.h);
+      const by=e2b(pg.g, pt.y); if(by==null) return; const bpt={x:pt.x, y:by};
+      const hit = state.shared.masks.filter(m=>m.p===p && bpt.x>=m.x && bpt.x<=m.x+m.w && bpt.y>=m.y && bpt.y<=m.y+m.h);
       if(!hit.length) return;
       if(state.revealAll){ state.revealAll=false; state.revealed=new Set(state.shared.masks.map(m=>m.id)); }
       for(const m of hit){ state.revealed.has(m.id) ? state.revealed.delete(m.id) : state.revealed.add(m.id); }
@@ -1110,6 +1205,7 @@ function pageTarget(pg){
   };
 }
 function findProblem(p, pt){
+  const g=state.pages[p]?.g; if(g?.gaps?.length){ const y=e2b(g, pt.y); if(y==null) return null; pt={x:pt.x, y}; }
   const c = state.shared.problems.filter(q=>q.p===p && pt.x>=q.x && pt.x<=q.x+q.w && pt.y>=q.y && pt.y<=q.y+q.h);
   c.sort((a,b)=>a.w*a.h-b.w*b.h); return c[0]?.id || null;
 }
@@ -1143,6 +1239,8 @@ function rotatePages(list){
   if(!state.book) return; const b=state.book.id, sh=state.shared;
   const before=clone(sh.rot||{});
   const apply=(r)=>{ sh.rot=r; saveShared(b); relayout(); };
+  const skip=list.filter(p=>(state.ink.get(p)?.gaps||[]).length); list=list.filter(p=>!skip.includes(p));
+  if(skip.length) toast(`すきまのあるページ（${skip.length}ページ）は回転しませんでした`, 3000); if(!list.length) return;
   const after={...before}; for(const p of list){ after[p]=(((after[p]||0)+90)%360); if(!after[p]) delete after[p]; }
   apply(clone(after)); pushUndo({undo:()=>apply(clone(before)), redo:()=>apply(clone(after))});
 }
@@ -1222,7 +1320,7 @@ function renderTools(){
      PEN_W.map((w,i)=>`<button class="wd ${state.penW===i?'on':''}" data-pw="${i}"><i style="height:${2+i*2.5}px"></i></button>`).join('');
   else if(t==='marker') o.innerHTML = sw('mk', S.mkRecent, S.mk) +
      MK_W.map((w,i)=>`<button class="wd ${state.mkW===i?'on':''}" data-mw="${i}"><i style="height:${6+i*4}px;opacity:.5"></i></button>`).join('');
-  else o.innerHTML = `<div class="hint">${({hand:'指でスクロール。穴うめをタップで開く',eraser:'なぞった線を消す',o:'タップで押す。もう一度タップで取り消し',t:'タップで押す。もう一度タップで取り消し',x:'タップで押す。もう一度タップで取り消し',region:'1問ぶんを指やペンで囲むと「問題」として登録',mask:'かくしたい所を囲む。「見る」でタップすると開く'})[t]}</div>`;
+  else o.innerHTML = `<div class="hint">${({hand:'指でスクロール。穴うめをタップで開く',eraser:'なぞった線を消す',o:'タップで押す。もう一度タップで取り消し',t:'タップで押す。もう一度タップで取り消し',x:'タップで押す。もう一度タップで取り消し',region:'1問ぶんを指やペンで囲むと「問題」として登録',mask:'かくしたい所を囲む。「見る」でタップすると開く',gap:'書くスペースがほしい所をタップ。すきまをタップで広さを変える'})[t]}</div>`;
   applyTouchMode(); renderToolsMin();
   if(state.book) state.pages.forEach(renderOverlay);
 }
@@ -1891,7 +1989,9 @@ async function onLiveMsg(m){
   }
   if(!state.viewOnly) return;
   if(m.t==='page' && state.book?.id===m.b){
+    const oldG=JSON.stringify(state.ink.get(m.p)?.gaps||[]);
     state.ink.set(m.p, m.rec); store.put('ink', inkKey(m.b,m.p), m.rec).catch(()=>{});
+    if(JSON.stringify(m.rec.gaps||[])!==oldG) relayoutPage(m.p);
     const pg=state.pages[m.p]; if(pg?.rendered){ drawInk(pg); clearViewLive(m.p); }
     if(state.memoOpen && memoPage===m.p) drawMemo();
   } else if(m.t==='live' && state.book?.id===m.b && m.item){
@@ -1923,8 +2023,8 @@ const advKey=(b,p,L=state.learner)=>`adv|${L}|${b}|${p}`;
 function saveAdv(p){
   const r=getAdv(p); r.updated=Date.now(); const b=state.book.id, L=state.learner;
   Live.send({t:'adv', L, b, p, rec:{items:r.items, updated:r.updated}});
+  store.put('ink', advKey(b,p,L), r).catch(()=>{});
   debounce('adv'+L+b+p, ()=>{
-    store.put('ink', advKey(b,p,L), r).catch(()=>{});
     Cloud.put(`ln_${L}_${b}/adv/p${p}`, {kind:'adv', updated:r.updated, items:r.items}, true);
   }, 500);
   renderAdvBtn();
