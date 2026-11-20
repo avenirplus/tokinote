@@ -167,6 +167,7 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
 #qBar.hidden{display:none}
+.btn.sub.on{background:var(--accent-soft);outline:2px solid var(--accent);color:var(--accent)}
 @media (max-width:900px){ #btnAsk .lbl{display:none} }
 #ansPanel{position:fixed;z-index:800;background:#fff;box-shadow:0 0 18px rgba(0,0,0,.25);display:flex;flex-direction:column}
 #ansPanel[data-side=right]{top:60px;right:0;bottom:var(--ansb,90px);border-bottom-left-radius:10px;width:min(46vw,620px);border-left:3px solid #1f6feb}
@@ -355,7 +356,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 <div id="toast"></div>
 <input type="file" id="lecImgFile" accept="image/*" hidden>
 <input type="file" id="filePdf" accept="application/pdf,.pdf" multiple hidden>
-<input type="file" id="fileJson" accept="application/json,.json" hidden>
+<input type="file" id="fileJson" accept="application/json,.json,application/zip,.zip" hidden>
 <input type="file" id="advImgFile" accept="image/*" hidden>
 <input type="file" id="advVidFile" accept="video/*" hidden>
 
@@ -1500,8 +1501,8 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="rotAll"><span>全ページを回転</span><span>🔄</span></button>
   <button class="opt" data-a="clearPage"><span>このページの書き込みを消す<br><span class="s">丸つけと記録は残ります（↶で戻せます）</span></span><span>🧽</span></button>
   <button class="opt" data-a="clearAll"><span>全ページの書き込みを消す<br><span class="s">問題集を新品に戻して解き直す</span></span><span>📄</span></button>
-  <button class="opt" data-a="backup"><span>バックアップを保存<br><span class="s">書き込み・丸つけ・記録（PDF本体は含みません）</span></span><span>💾</span></button>
-  <button class="opt" data-a="restore"><span>バックアップから戻す</span><span>📥</span></button>
+  <button class="opt" data-a="export"><span>🖨 書き出し・印刷<br><span class="s">書きこみ入りのPDFを保存・印刷（ページを選べる）</span></span><span>🖨</span></button>
+  <button class="opt" data-a="backup"><span>💾 バックアップ・引っ越し<br><span class="s">書きこみだけ（軽い）／PDFもふくめて全部／戻す</span></span><span>💾</span></button>
   <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>
   ${Cloud.mode==='cf'?'<button class="opt" data-a="push"><span>🔔 しつもん通知を受け取る（この端末）<br><span class="s">おうちの人のスマホで設定します</span></span><span>🔔</span></button><button class="opt" data-a="pushtest"><span>🔔 通知のテスト</span><span>📨</span></button>':''}
   ${Cloud.mode==='cf'?'<button class="opt" data-a="logout"><span>この端末でログアウト<br><span class="s">次に開くときはパスコードが必要です</span></span><span>🔒</span></button>':''}`,
@@ -1517,7 +1518,8 @@ async function menuAction(a){
   else if(a==='rotAll'){ if(state.book) rotatePages(state.pages.map(p=>p.i)); }
   else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
   else if(a==='clearAll'){ if(!state.book) return; if(await confirmDlg('全ページの書き込みを消す', 'この問題集の線をすべて消します。丸つけと記録は残ります。↶で戻せます。', '全部消す', true)) clearStrokes([...state.ink.keys()]); }
-  else if(a==='backup') exportBackup();
+  else if(a==='backup') backupMenu();
+  else if(a==='export') exportMenu();
   else if(a==='restore') $('#fileJson').click();
   else if(a==='help') showHelp();
   else if(a==='push') setupPush();
@@ -1543,31 +1545,6 @@ function showHelp(){
   📄 ⋯ → 全ページの書き込みを消す で、何度でも新品から解き直せます。</p>
   <button class="btn" style="width:100%" data-a="1">OK</button>`, close=>$('#sheet').querySelector('[data-a]').onclick=()=>close());
 }
-
-/* ================= backup ================= */
-async function exportBackup(){
-  let dl=null; try{ dl = await window.claude?.use?.('downloads'); }catch{}
-  if(!dl){ toast('この画面ではファイル保存ができません'); return; }
-  const data={}; for(const s of ['books','shared','learn','ink','meta']) data[s]=await store.all(s);
-  const json=JSON.stringify({app:'tokinote', v:1, at:new Date().toISOString(), data});
-  try{ await dl.save({filename:`tokinote-backup-${dateKey()}.json`, data:new Blob([json],{type:'application/json'})}); toast('バックアップを保存しました'); }
-  catch(e){ toast(e?.code==='declined' ? '保存をやめました' : 'バックアップを保存できませんでした'); }
-}
-$('#fileJson').onchange=async e=>{
-  const f=e.target.files[0]; e.target.value=''; if(!f) return;
-  try{
-    const j=JSON.parse(await f.text()); if(j.app!=='tokinote') throw 0;
-    let n=0;
-    for(const [k,v] of j.data.books||[]){ if(!(await store.get('books',k))){ await store.put('books',k,v); n++; } }
-    for(const [k,v] of j.data.shared||[]){ const l=await store.get('shared',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('shared',k,v); n++; } }
-    for(const [k,v] of j.data.learn||[]){ const l=await store.get('learn',k); const m=mergeLearn(l,v); await store.put('learn',k,m); n++; }
-    for(const [k,v] of j.data.ink||[]){ const l=await store.get('ink',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('ink',k,v); n++; } }
-    for(const [k,v] of j.data.meta||[]){ if(String(k).startsWith('stats|')){ const l=await store.get('meta',k); await store.put('meta',k,mergeStats(l,v)); } }
-    await loadAllForLearner(); refreshDue(); renderStats();
-    if(state.book) await openBook(state.book.id); else renderLib();
-    toast(`バックアップから戻しました（${n}件）`);
-  }catch{ toast('このファイルは読み込めませんでした'); }
-};
 
 /* ================= library ================= */
 function showScreen(s){ if(s!=='main' && typeof ANS!=='undefined' && ANS.open) closeAnswer();
@@ -3375,6 +3352,181 @@ function sendMemoState(open){
   if(Cloud.mode!=='cf' || !state.book) return;
   Live.send({t:'memo', L:state.learner, b:state.book.id, p:memoPage, open, from:state.viewOnly?'parent':'child'});
 }
+
+/* ================= 🖨 書きこみ入りPDFの書き出し・印刷、バックアップ ================= */
+// ファイルを渡す：claude.ai内 → ダウンロード機能、iPhone/iPad → 共有シート（ファイルに保存・プリント）、ほか → ダウンロード
+async function saveFile(blob, filename, {print=false}={}){
+  let dl=null; try{ dl = await window.claude?.use?.('downloads'); }catch{}
+  if(dl){ try{ await dl.save({filename, data:blob}); toast('保存しました'); }catch(e){ toast(e?.code==='declined'?'保存をやめました':'保存できませんでした'); } return; }
+  const file=new File([blob], filename, {type:blob.type});
+  if(navigator.canShare?.({files:[file]})){
+    const go=await openSheet(`<h3>${print?'🖨 印刷の準備ができました':'📤 ファイルができました'}</h3><p class="note" style="margin-bottom:12px">${esc(filename)}（${(blob.size/1048576).toFixed(1)}MB）<br>${print?'次の画面で「プリント」を選んでください。':'次の画面で「ファイルに保存」やAirDropなどを選べます。'}</p>
+      <button class="big" data-a="1" style="margin:0">${print?'🖨 プリントへ':'📤 開く'}</button>`, close=>$('#sheet [data-a]').onclick=()=>close(true));
+    if(!go) return;
+    try{ await navigator.share({files:[file], title:filename}); }catch(e){ if(e?.name!=='AbortError') toast('共有できませんでした'); }
+    return;
+  }
+  const url=URL.createObjectURL(blob);
+  if(print){ const w=window.open(url,'_blank'); if(!w) toast('ポップアップが止められました'); setTimeout(()=>URL.revokeObjectURL(url), 120000); return; }
+  const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url), 60000);
+}
+const safeName = s => String(s||'tokinote').replace(/[\\/:*?"<>|]+/g,'_').slice(0,60);
+function exWrapText(ctx, it, d, k, bubble){
+  const fs=(it.fs||ADV_FS[1])*k; ctx.save(); ctx.font=`700 ${fs}px "Hiragino Sans","Noto Sans JP",sans-serif`; ctx.textBaseline='top';
+  const maxW=(it.w||4000)*k, lines=[];
+  for(const para of String(it.text||'').split('\n')){ let line=''; for(const ch of para){ if(line && ctx.measureText(line+ch).width>maxW){ lines.push(line); line=ch; } else line+=ch; } lines.push(line); }
+  const x=d.x*k, y=d.y*k, lh=fs*1.35, mw=Math.max(...lines.map(l=>ctx.measureText(l).width));
+  if(bubble){ ctx.fillStyle='rgba(255,255,255,.92)'; ctx.strokeStyle=it.c||'#e11d48'; ctx.lineWidth=Math.max(1,fs*.08); const p=fs*.35; ctx.beginPath(); ctx.roundRect?.(x-p, y-p, mw+2*p, lines.length*lh+2*p, fs*.4); ctx.fill(); ctx.stroke(); }
+  ctx.fillStyle=it.c||'#1d2330'; lines.forEach((l,i)=>ctx.fillText(l, x, y+i*lh)); ctx.restore();
+}
+// 1ページ分の書きこみ（＋必要なら紙面）を描く。k = 1単位あたりのピクセル
+async function exDrawPage(ctx, p, k, opt, withBg){
+  const pg=state.pages[p], g=pg.g;
+  if(withBg){
+    const page=await state.pdf.getPage(p+1); const rotation=((page.rotate||0)+g.rot)%360;
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,ctx.canvas.width,ctx.canvas.height);
+    await paintPdf(ctx, page, rotation, g, k, 0, 0, ctx.canvas.width, ctx.canvas.height, ()=>{}, ()=>true);
+  }
+  if(opt.masks) for(const m of (state.shared.masks||[]).filter(m=>m.p===p)){
+    const r=rectMap(toD, g, rectBE(g, m)); ctx.fillStyle='#fff'; ctx.strokeStyle='#9aa3b2'; ctx.lineWidth=Math.max(1,12*k);
+    ctx.fillRect(r.x*k, r.y*k, r.w*k, r.h*k); ctx.strokeRect(r.x*k, r.y*k, r.w*k, r.h*k);
+  }
+  const ink = opt.ink ? getInk(p).items : [], adv = opt.adv ? advItems(p) : [];
+  drawOnPage(ctx, ink.concat(adv).filter(it=>it.k==='s'||it.k==='m'||it.k==='st'), g, k);
+  for(const it of adv) if(it.k==='im'){
+    try{ const u=await imgURL(it.img); if(!u) continue; const im=new Image(); im.src=u; await im.decode(); const d=toD(g,it.x,it.y); ctx.drawImage(im, d.x*k, d.y*k, it.w*k, it.h*k); }catch{}
+  }
+  for(const it of ink) if(it.k==='tx') exWrapText(ctx, it, toD(g,it.x,it.y), k, false);
+  for(const it of adv) if(it.k==='tx') exWrapText(ctx, it, toD(g,it.x,it.y), k, true);
+}
+function parsePages(s, n){
+  const set=new Set();
+  for(const part of String(s).replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0)).replace(/[〜～ー－]/g,'-').split(/[,、\s]+/)){
+    const m=part.match(/^(\d+)(?:-(\d+))?$/); if(!m) continue; let a=+m[1], b=+(m[2]||m[1]); if(a>b) [a,b]=[b,a];
+    for(let i=Math.max(1,a); i<=Math.min(n,b); i++) set.add(i-1);
+  }
+  return [...set].sort((a,b)=>a-b);
+}
+async function exportMenu(){
+  if(!state.book || !state.pdf) return;
+  const n=state.book.pages, cur=state.curPage;
+  const opt={ink:true, adv:true, masks:false}, sw=(k,on)=>`<span class="sw2 ${on?'on':''}" data-sw="${k}"></span>`;
+  const r=await openSheet(`<h3>🖨 書き出し・印刷</h3>
+    <p class="note" style="margin:0 0 6px">どのページ？</p>
+    <div class="grid2" style="margin-bottom:6px"><button class="btn sub on" data-r="cur">このページ（${cur+1}）</button><button class="btn sub" data-r="all">全部（${n}ページ）</button></div>
+    <input id="exPages" class="txt" placeholder="ページを指定：例 3-8, 12" style="margin-bottom:10px">
+    <button class="opt" data-t="ink"><span>子どもの書きこみ・丸つけ</span>${sw('ink',1)}</button>
+    <button class="opt" data-t="adv"><span>おうちの人のアドバイス（線・文字・画像）</span>${sw('adv',1)}</button>
+    <button class="opt" data-t="masks"><span>穴うめ（答えを白でかくす）</span>${sw('masks',0)}</button>
+    <p class="note" style="margin:6px 0 10px">紙で解き直すなら、書きこみ・アドバイスを外して穴うめをオンに。</p>
+    <div class="grid2"><button class="btn sub" data-a="save" style="height:54px">📤 PDFで保存</button><button class="btn" data-a="print" style="height:54px">🖨 印刷</button></div>`,
+    close=>{
+      let range='cur'; const sh=$('#sheet');
+      sh.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>{ range=b.dataset.r; $('#exPages').value=''; sh.querySelectorAll('[data-r]').forEach(x=>x.classList.toggle('on',x===b)); });
+      $('#exPages').oninput=()=>{ range='list'; sh.querySelectorAll('[data-r]').forEach(x=>x.classList.remove('on')); };
+      sh.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{ const k=b.dataset.t; opt[k]=!opt[k]; b.querySelector('.sw2').classList.toggle('on',opt[k]); });
+      sh.querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close({a:b.dataset.a, range, list:$('#exPages').value}));
+    });
+  if(!r) return;
+  const pages = r.range==='all' ? [...Array(n).keys()] : r.range==='list' ? parsePages(r.list, n) : [cur];
+  if(!pages.length){ toast('ページの指定を確かめてください（例 3-8, 12）'); return; }
+  await buildExportPdf(pages, opt, r.a==='print');
+}
+async function buildExportPdf(pages, opt, print){
+  const {PDFDocument} = await import('./vendor/pdf-lib.esm.min.js');
+  const raw=await store.get('files', state.book.id); if(!raw){ toast('PDFの本体がこの端末にありません'); return; }
+  toast(`PDFを作っています… 0/${pages.length}`, 60000);
+  let src=null; try{ src=await PDFDocument.load(raw.slice(0), {ignoreEncryption:true}); }catch(e){ console.warn('pdf-lib load', e); }
+  const out=await PDFDocument.create(); out.setTitle(state.book.name); out.setCreator('トキノート');
+  const toBytes=async(c,type,q)=>new Uint8Array(await (await new Promise(r=>c.toBlob(r,type,q))).arrayBuffer());
+  let i=0;
+  for(const p of pages){
+    const pg=state.pages[p], g=pg.g, page=await state.pdf.getPage(p+1);
+    const vp=page.getViewport({scale:1}); const ptPerU=vp.width/10000;   // 元ページの幅（ポイント）
+    const plain = src && !g.gaps?.length && !g.rot && !(page.rotate%360);
+    if(plain){
+      // 元のページはそのまま（文字がくっきり）、書きこみだけを透明な絵として重ねる
+      const [cp]=await out.copyPages(src, [p]); out.addPage(cp);
+      const k=Math.min(2400, Math.max(1400, 1800))/g.Dw;
+      const c=document.createElement('canvas'); c.width=Math.round(g.Dw*k); c.height=Math.round(g.Dh*k);
+      await exDrawPage(c.getContext('2d'), p, k, opt, false);
+      const png=await out.embedPng(await toBytes(c,'image/png'));
+      const box=cp.getCropBox(); cp.drawImage(png, {x:box.x, y:box.y, width:box.width, height:box.height});
+    } else {
+      // すきま・回転のあるページは、見えている形のまま1枚の絵にする
+      const k=Math.min(2000, 1700)/g.Dw; const c=document.createElement('canvas'); c.width=Math.round(g.Dw*k); c.height=Math.min(16000, Math.round(g.Dh*k));
+      await exDrawPage(c.getContext('2d'), p, k, opt, true);
+      const jpg=await out.embedJpg(await toBytes(c,'image/jpeg',.9));
+      const W=g.Dw*ptPerU, H=g.Dh*ptPerU; const np=out.addPage([W,H]); np.drawImage(jpg,{x:0,y:0,width:W,height:H});
+    }
+    i++; $('#toast').textContent=`PDFを作っています… ${i}/${pages.length}`;
+  }
+  const bytes=await out.save(); toast('できました', 1200);
+  const range = pages.length===1 ? `p${pages[0]+1}` : pages.length===state.book.pages ? '全ページ' : `p${pages[0]+1}-${pages[pages.length-1]+1}`;
+  const who=state.learners.find(l=>l.id===state.learner)?.name||'';
+  await saveFile(new Blob([bytes],{type:'application/pdf'}), `${safeName(state.book.name)}_${range}${who?'_'+safeName(who):''}_${dateKey()}.pdf`, {print});
+}
+
+// バックアップ：書きこみデータだけ（.json、軽い）／PDF・音声・画像もふくめて全部（.zip）
+async function backupMenu(){
+  const r=await openSheet(`<h3>💾 バックアップ</h3>
+    <button class="opt" data-a="json"><span>書きこみ・丸つけ・記録だけ<br><span class="s">軽い。PDF本体は入りません（.json）</span></span><span>💾</span></button>
+    <button class="opt" data-a="zip"><span>PDF・音声・画像もふくめて全部<br><span class="s">大きくなります。別のiPadへの引っ越しにも（.zip）</span></span><span>📦</span></button>
+    <button class="opt" data-a="restore"><span>バックアップから戻す<br><span class="s">今のデータは消さず、新しい方を残して合わせます</span></span><span>↩️</span></button>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+  if(r==='json') exportBackup(false);
+  else if(r==='zip') exportBackup(true);
+  else if(r==='restore') $('#fileJson').click();
+}
+async function exportBackup(full){
+  toast('バックアップを作っています…', 60000);
+  const data={}; for(const s of ['books','shared','learn','ink','meta']) data[s]=await store.all(s);
+  const json=JSON.stringify({app:'tokinote', v:1, at:new Date().toISOString(), data});
+  if(!full){ toast('できました',1000); await saveFile(new Blob([json],{type:'application/json'}), `tokinote-backup-${dateKey()}.json`); return; }
+  const {zipSync, strToU8}=await import('./vendor/fflate.mjs');
+  const files={'tokinote.json':strToU8(json)}; let total=0;
+  for(const k of await store.keys('files')){
+    const v=await store.get('files',k); if(!v) continue;
+    const u8 = v instanceof Uint8Array ? v : v instanceof ArrayBuffer ? new Uint8Array(v) : v instanceof Blob ? new Uint8Array(await v.arrayBuffer()) : null; if(!u8) continue;
+    files['files/'+encodeURIComponent(k)]=[u8,{level:0}]; total+=u8.length;
+    if(total>1.5e9){ toast('大きすぎてまとめられません。書きこみだけのバックアップにしてください', 5000); return; }
+  }
+  const zip=zipSync(files); toast('できました',1000);
+  await saveFile(new Blob([zip],{type:'application/zip'}), `tokinote-all-${dateKey()}.zip`);
+}
+async function restoreBackup(j, filesMap){
+  if(j.app!=='tokinote') throw new Error('not tokinote');
+  if(!(await confirmDlg('バックアップから戻す', '今のデータは消さずに、バックアップと合わせます（同じものは新しい方が残ります）。', '戻す'))) return;
+  let n=0, nf=0;
+  for(const [k,u8] of filesMap||[]){ if(!(await store.get('files',k))){ await store.put('files',k,u8.buffer.slice(u8.byteOffset,u8.byteOffset+u8.byteLength)); nf++; } }
+  for(const [k,v] of j.data.books||[]){ if(!(await store.get('books',k))){ await store.put('books',k,v); n++; } }
+  for(const [k,v] of j.data.shared||[]){ const l=await store.get('shared',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('shared',k,v); n++; } }
+  for(const [k,v] of j.data.learn||[]){ const l=await store.get('learn',k); await store.put('learn',k,mergeLearn(l,v)); n++; }
+  for(const [k,v] of j.data.ink||[]){ const l=await store.get('ink',k); if(!l || (v.updated||0)>(l.updated||0)){ await store.put('ink',k,v); n++; } }
+  for(const [k,v] of j.data.meta||[]){
+    const l=await store.get('meta',k);
+    if(String(k).startsWith('stats|')) await store.put('meta',k,mergeStats(l,v));
+    else if(String(k).startsWith('rewards|')) await store.put('meta',k, l?mergeRewards(l,v):v);
+    else if(!l) await store.put('meta',k,v);
+  }
+  await loadAllForLearner(); refreshDue(); renderStats();
+  if(state.book) await openBook(state.book.id); else renderLib();
+  if(Cloud.db) pushAllBooksToCloud?.();
+  toast(`バックアップから戻しました（${n}件${nf?`・ファイル${nf}個`:''}）`, 3500);
+}
+$('#fileJson').onchange=async e=>{
+  const f=e.target.files[0]; e.target.value=''; if(!f) return;
+  try{
+    if(/\.zip$/i.test(f.name) || f.type.includes('zip')){
+      toast('読みこんでいます…', 30000);
+      const {unzipSync, strFromU8}=await import('./vendor/fflate.mjs');
+      const z=unzipSync(new Uint8Array(await f.arrayBuffer()));
+      const j=JSON.parse(strFromU8(z['tokinote.json']));
+      const fm=Object.entries(z).filter(([k])=>k.startsWith('files/')).map(([k,v])=>[decodeURIComponent(k.slice(6)), v]);
+      await restoreBackup(j, fm);
+    } else await restoreBackup(JSON.parse(await f.text()));
+  }catch(err){ console.warn(err); toast('このファイルは読み込めませんでした'); }
+};
 
 /* ================= boot ================= */
 guardStylus($('#pages'));

@@ -30,6 +30,8 @@
 | 動画 | 見守り画面の🎥で、画面収録やカメラの動画（60MBまで）を送る。子どもはタップで再生。消すとクラウドからも消える |
 | アドバイス | 見守り画面から、手書き・文字・画像・音声（最大2分）でアドバイスを書き込み、子どもの画面にリアルタイムで重ねて表示。子どもは消せず、💬で一時的に隠せる。画像はタップで拡大 |
 | 答え | 📖で答えのページを横（または下）に並べて表示。答えは同じPDFのうしろでも別のPDFでもよく、◀▶で合わせると問題ページごとに覚える。⋯ でパスコード必須にできる（10分有効） |
+| 書き出し・印刷 | ⋯ →「🖨 書き出し・印刷」で、書きこみ入りのPDFを保存・印刷。ページ指定（例 3-8, 12）、子どもの書きこみ／アドバイス／穴うめ（白でかくす）を選べる。元のページの文字はそのまま残し、すきま・回転のあるページは見たままの絵にする |
+| バックアップ | 書きこみだけ（.json、軽い）／PDF・音声・画像もふくめて全部（.zip、引っ越し用）。戻すときは今のデータを消さずに、新しい方を残して合わせる |
 | しつもん | 子どもが🙋で「このまま／文字／声」でしつもん → おうちの人のスマホに通知。通知を開くとそのページの見守りが始まり、子どもに「見てくれています」と出る（Cloudflare版・ホーム画面に追加した端末） |
 | その他 | ツールバーを隠す、全ページの書き込みを消して解き直し、バックアップの保存と復元 |
 
@@ -37,7 +39,7 @@
 
 ```
 public/index.html          アプリ本体（HTML・CSS・JavaScript）
-public/vendor/             PDF.js 4.10.38（legacy版）
+public/vendor/             PDF.js 4.10.38（legacy版）、pdf-lib 1.17.1（PDF書き出し）、fflate 0.8.2（zip）
 public/cmaps.json          日本語PDF用の文字対応表（PDF.js の cmaps を1ファイルにまとめたもの）
 worker/index.js            Cloudflare Worker と Durable Object「Family」
 public/sw.js               通知の受け取り・オフライン用の保存
@@ -120,5 +122,7 @@ wrangler dev             # → http://localhost:8787/
 ## ライセンス
 
 - PDF.js：Apache License 2.0（`licenses/pdfjs-LICENSE.txt`）
+- pdf-lib：MIT（`licenses/pdf-lib-LICENSE.md`）
+- fflate：MIT（`licenses/fflate-LICENSE.txt`）
 - cMap データ（Adobe）：`licenses/cmaps-LICENSE.txt`
 - 市販の問題集PDFは各家庭での私的利用にとどめ、このリポジトリには含めません。
