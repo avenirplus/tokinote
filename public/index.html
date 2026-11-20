@@ -216,6 +216,14 @@ body.hasQ #app,body.hasQ .screen{top:var(--qh,52px)}
 #advTools{display:none;position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
   align-items:center;gap:2px;padding:6px 8px;background:#fff;border-radius:20px;box-shadow:0 4px 18px rgba(20,30,50,.18);max-width:calc(100vw - 16px);flex-wrap:wrap;justify-content:center;border:2px solid #0a9b5c}
 body.viewing #advTools{display:flex}
+#advTools{flex-direction:column;flex-wrap:nowrap!important;gap:2px}
+#advTools .advRow1{display:flex;align-items:center;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+#advTools .advRow1::-webkit-scrollbar,#advTools .advRow2::-webkit-scrollbar{display:none}
+#advTools .advRow1>*,#advTools .advRow2>*{flex:0 0 auto}
+#advTools .advRow2{display:flex;align-items:center;gap:6px;max-width:100%;overflow-x:auto;scrollbar-width:none;padding:2px 4px}
+#advTools .advHide{position:absolute;top:-30px;right:14px;height:28px;padding:0 12px;border-radius:14px 14px 0 0;background:#fff;border:2px solid #0a9b5c;border-bottom:0;font-size:13px;font-weight:700;color:#0a9b5c}
+#advTools.min{left:auto;right:calc(12px + env(safe-area-inset-right));transform:none;padding:5px;border-radius:18px}
+@media (min-width:1420px){ #advTools{flex-direction:row} }
 .advlabel{font-size:12px;font-weight:800;color:#0a9b5c;padding:0 6px}
 .ov>.advtx{height:auto;font-size:calc(var(--fs) * var(--u) * 1px);color:var(--c);background:rgba(255,255,255,.9);border:2px solid var(--c);
   border-radius:10px;padding:.25em .45em;font-weight:700;line-height:1.4;white-space:pre-wrap;word-break:break-all;box-shadow:0 2px 6px rgba(0,0,0,.12)}
@@ -2235,15 +2243,18 @@ $('#advImgFile').onchange=async e=>{
 function renderAdvTools(){
   const t=state.advTool;
   const B=(id,ic,lb)=>`<button class="tool ${t===id?'on':''}" data-at="${id}">${ic}<small>${lb}</small></button>`;
-  $('#advTools').innerHTML = `<span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
-    + `<button class="tool" data-react="1">👏<small>リアクション</small></button>`
-    + `<div class="sep"></div>` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
-    + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button>`;
+  const ICON={hand:'✋',apen:'✍️',atext:'🔤',aimg:'🖼',aaud:'🎤',alec:'🎬',avid:'🎥',astamp:'🌟',agap:'↕️',aping:'👆',aerase:'🧽'};
+  const hid=!!state.settings.advHidden; $('#advTools').classList.toggle('min', hid);
+  if(hid){ $('#advTools').innerHTML=`<button class="tool on" data-ashow="1">${ICON[t]||'✋'}<small>道具を出す</small></button>`; document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase')); return; }
+  $('#advTools').innerHTML = `<button class="advHide" data-ahide="1">▾ かくす</button><div class="advRow1"><span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
+    + `<button class="tool" data-react="1">👏<small>リアクション</small></button></div><div class="advRow2">` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
+    + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button></div>`;
   document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.react){ sendReaction(); return; }
+  if(b.dataset.ahide||b.dataset.ashow){ state.settings.advHidden=!!b.dataset.ahide; saveMeta(); renderAdvTools(); return; }
   if(b.dataset.at==='astamp'){ pickSticker(true).then(ok=>{ if(ok){ state.advTool='astamp'; renderAdvTools(); toast(`${state.sticker.e} をはりたい場所をタップ`, 2000); } }); return; }
   if(b.dataset.at==='aping') toast('👆 見てほしい場所をタップすると、子どもの画面でそこが光ります', 2600);
   if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
