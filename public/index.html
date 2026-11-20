@@ -78,14 +78,23 @@ body.fd #memoStage{touch-action:none}
 #tools{position:absolute;left:50%;bottom:calc(12px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:6;
   display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;background:var(--card);border-radius:20px;
   box-shadow:0 4px 18px rgba(20,30,50,.18);max-width:calc(100vw - 16px)}
-#toolBtns{display:flex;gap:2px;flex-wrap:nowrap}
+#toolBtns{display:flex;gap:2px;flex-wrap:nowrap;max-width:100%;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
+#toolBtns::-webkit-scrollbar,#opts::-webkit-scrollbar{display:none}
+#toolBtns .tool{flex:0 0 auto;scroll-snap-align:start}
+#tools.scrollL::before,#tools.scrollR::after{content:'';position:absolute;top:6px;height:54px;width:22px;pointer-events:none;z-index:1}
+#tools.scrollL::before{left:8px;background:linear-gradient(90deg,var(--card),transparent)}
+#tools.scrollR::after{right:8px;background:linear-gradient(-90deg,var(--card),transparent)}
+#btnToolsHide{position:absolute;top:-30px;right:14px;width:auto!important;height:28px!important;min-width:0;padding:0 12px;border-radius:14px 14px 0 0;background:var(--card);box-shadow:0 -3px 8px rgba(20,30,50,.12);font-size:13px!important;font-weight:700;color:var(--sub)}
+#tools.min #btnToolsHide{display:none}
 #toolsMini{display:none}
 #tools.min{left:auto;right:calc(12px + env(safe-area-inset-right));transform:none;padding:5px;border-radius:18px}
 #tools.min #toolBtns,#tools.min #row2{display:none}
 #tools.min #toolsMini{display:flex;outline:2px solid var(--accent);background:var(--accent-soft)}
-#row2{display:flex;align-items:center;gap:2px}
-@media (min-width:1100px){ #tools{flex-direction:row} #row2{margin-left:6px;border-left:1px solid var(--line);padding-left:6px} }
-.tool{width:clamp(30px,calc((100vw - 52px)/13),54px);height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
+#row2{display:flex;align-items:center;gap:2px;max-width:100%;min-width:0}
+#opts{overflow-x:auto;flex:0 1 auto;min-width:0;scrollbar-width:none}
+#opts>*{flex:0 0 auto}
+@media (min-width:1420px){ #tools{flex-direction:row} #row2{margin-left:6px;border-left:1px solid var(--line);padding-left:6px} }
+.tool{width:50px;height:54px;border-radius:14px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:22px;line-height:1}
 .tool small{font-size:10px;white-space:nowrap;color:var(--sub);margin-top:3px}
 .tool.on{background:var(--accent-soft);outline:2px solid var(--accent)}
 .sep{width:1px;height:38px;background:var(--line);margin:0 4px}
@@ -167,6 +176,29 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
 #qBar.hidden{display:none}
+@media (max-width:700px){
+  #top{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex-wrap:nowrap}
+  #top::-webkit-scrollbar{display:none}
+  #top>*{flex:0 0 auto}
+  #stats,#top .sp{display:none}
+  #bookTitle{max-width:28vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #btnHelp,#btnMore{position:sticky;z-index:2;background:var(--card)}
+  #btnMore{right:0} #btnHelp{right:40px;box-shadow:-10px 0 10px var(--card)}
+}
+#rotBar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#eaf2ff;border-bottom:1px solid #b9d0f5;font-size:15px}
+#rotBar.hidden{display:none}
+#rotBar .s{font-size:12px;color:var(--sub)}
+#rotBar .seg{display:flex;border-radius:10px;overflow:hidden;border:1px solid #b9d0f5}
+#rotBar .seg button{padding:6px 10px;background:#fff;font-size:14px}
+#rotBar .seg button.on{background:var(--accent);color:#fff}
+.help details{border:1px solid var(--line);border-radius:12px;margin-bottom:6px;background:#fff}
+.help summary{padding:11px 12px;font-weight:800;font-size:16px;cursor:pointer;list-style:none}
+.help summary::-webkit-details-marker{display:none}
+.help summary::after{content:'＋';float:right;color:var(--sub)}
+.help details[open] summary::after{content:'－'}
+.help details>div{padding:0 14px 10px;line-height:1.7;font-size:15px}
+.help ul,.help ol{margin:0;padding-left:1.3em}
+body.viewing #rotBar{display:none}
 .btn.sub.on{background:var(--accent-soft);outline:2px solid var(--accent);color:var(--accent)}
 @media (max-width:900px){ #btnAsk .lbl{display:none} }
 #ansPanel{position:fixed;z-index:800;background:#fff;box-shadow:0 0 18px rgba(0,0,0,.25);display:flex;flex-direction:column}
@@ -262,8 +294,10 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnRed" class="ib" aria-label="赤シート">🟥</button>
     <button id="btnMaskAll" class="ib" aria-label="穴うめ全部">🙈</button>
     <button id="btnReview" class="pill">🔁 復習 <b id="dueCount">0</b></button>
+    <button id="btnHelp" class="ib" aria-label="使い方">❓</button>
     <button id="btnMore" class="ib" aria-label="メニュー">⋯</button>
   </header>
+  <div id="rotBar" class="hidden"></div>
   <div id="viewBar" class="hidden"><span id="viewText"></span><div class="sp"></div>
     <button id="viewFollow" class="pill">ついていく</button><button id="viewExit" class="pill">おわる</button></div>
   <div id="mainArea">
@@ -286,7 +320,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
       <div class="sep"></div>
       <button id="btnUndo" class="ib" aria-label="元に戻す">↶</button>
       <button id="btnRedo" class="ib" aria-label="やり直す">↷</button>
-      <button id="btnToolsHide" class="ib" aria-label="ツールをかくす" style="font-size:16px">▾</button>
+      <button id="btnToolsHide" class="ib" aria-label="ツールをかくす">▾ かくす</button>
     </div>
     <button id="toolsMini" class="tool" aria-label="ツールを出す"></button>
   </nav>
@@ -294,7 +328,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 
 <section id="lib" class="screen">
   <div class="wrap">
-    <h1>📚 トキノート</h1>
+    <div style="display:flex;align-items:center"><h1 style="flex:1">📚 トキノート</h1><button id="btnLibHelp" class="pill" style="font-size:16px">❓ 使い方</button></div>
     <div class="row" id="learners"></div>
     <button id="btnAdd" class="big">＋ 問題集のPDFを入れる</button>
     <button id="btnLibReview" class="big sub">🔁 間違えた問題の復習 <span id="libDue"></span></button>
@@ -1319,13 +1353,13 @@ function stampAt(pg, pt, m, e){
 }
 
 /* ================= rotate ================= */
-function rotatePages(list){
+function rotatePages(list, deg=90){
   if(!state.book) return; const b=state.book.id, sh=state.shared;
   const before=clone(sh.rot||{});
   const apply=(r)=>{ sh.rot=r; saveShared(b); relayout(); };
   const skip=list.filter(p=>(state.ink.get(p)?.gaps||[]).length); list=list.filter(p=>!skip.includes(p));
   if(skip.length) toast(`すきまのあるページ（${skip.length}ページ）は回転しませんでした`, 3000); if(!list.length) return;
-  const after={...before}; for(const p of list){ after[p]=(((after[p]||0)+90)%360); if(!after[p]) delete after[p]; }
+  const after={...before}; for(const p of list){ after[p]=(((after[p]||0)+deg)%360); if(!after[p]) delete after[p]; }
   apply(clone(after)); pushUndo({undo:()=>apply(clone(before)), redo:()=>apply(clone(after))});
 }
 
@@ -1406,9 +1440,11 @@ function renderTools(){
      MK_W.map((w,i)=>`<button class="wd ${state.mkW===i?'on':''}" data-mw="${i}"><i style="height:${6+i*4}px;opacity:.5"></i></button>`).join('');
   else if(t==='sticker') o.innerHTML = `<button class="pill" data-pick="1" style="font-size:${state.sticker.tx?14:24}px">${esc(state.sticker.e)}　えらぶ</button><div class="hint">タップではる・もう一度タップではがす</div>`;
   else o.innerHTML = `<div class="hint">${({hand:'指でスクロール。穴うめをタップで開く',eraser:'なぞった線を消す',o:'タップで押す。もう一度タップで取り消し',t:'タップで押す。もう一度タップで取り消し',x:'タップで押す。もう一度タップで取り消し',region:'1問ぶんを指やペンで囲むと「問題」として登録',mask:'かくしたい所を囲む。「見る」でタップすると開く',gap:'書くスペースがほしい所をタップ。すきまをタップで広さを変える',lasso:'書いたものを囲むと、動かす・大きくする・複製・消すができる',text:'文字を書きたい所をタップ。書いた文字をタップでなおす'})[t]}</div>`;
-  applyTouchMode(); renderToolsMin();
+  applyTouchMode(); renderToolsMin(); toolsFade();
   if(state.book) state.pages.forEach(renderOverlay);
 }
+function toolsFade(){ const tb=$('#toolBtns'), t=$('#tools'); t.classList.toggle('scrollL', tb.scrollLeft>4); t.classList.toggle('scrollR', tb.scrollLeft+tb.clientWidth < tb.scrollWidth-4); }
+$('#toolBtns').addEventListener('scroll', toolsFade, {passive:true}); window.addEventListener('resize', ()=>toolsFade());
 $('#tools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.tool && b.dataset.tool!=='lasso') clearSel();
@@ -1497,8 +1533,7 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
   <button class="opt" data-a="detect"><span>🔍 問題を自動で見つける<br><span class="s">問1・(2)・①などから1問ずつのわくを作る</span></span><span>🔍</span></button>
   <button class="opt" data-a="ansLock"><span>答えを見るときにパスコード<br><span class="s">オン：📖 答え を開くには、おうちの人のパスコード（10分有効）</span></span><span class="sw2 ${state.settings.ansLock?'on':''}"></span></button>
-  <button class="opt" data-a="rotPage"><span>このページを回転<br><span class="s">90°ずつ右に回ります（↶で戻せます）</span></span><span>↻</span></button>
-  <button class="opt" data-a="rotAll"><span>全ページを回転</span><span>🔄</span></button>
+  <button class="opt" data-a="rot"><span>📐 向きを合わせる<br><span class="s">全ページ／このページを、左右・上下に回す（↶で戻せます）</span></span><span>📐</span></button>
   <button class="opt" data-a="clearPage"><span>このページの書き込みを消す<br><span class="s">丸つけと記録は残ります（↶で戻せます）</span></span><span>🧽</span></button>
   <button class="opt" data-a="clearAll"><span>全ページの書き込みを消す<br><span class="s">問題集を新品に戻して解き直す</span></span><span>📄</span></button>
   <button class="opt" data-a="export"><span>🖨 書き出し・印刷<br><span class="s">書きこみ入りのPDFを保存・印刷（ページを選べる）</span></span><span>🖨</span></button>
@@ -1514,8 +1549,7 @@ async function menuAction(a){
   else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
   else if(a==='detect') autoDetect();
   else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスコード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
-  else if(a==='rotPage'){ if(state.book) rotatePages([state.curPage]); }
-  else if(a==='rotAll'){ if(state.book) rotatePages(state.pages.map(p=>p.i)); }
+  else if(a==='rot') openRotBar(false);
   else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
   else if(a==='clearAll'){ if(!state.book) return; if(await confirmDlg('全ページの書き込みを消す', 'この問題集の線をすべて消します。丸つけと記録は残ります。↶で戻せます。', '全部消す', true)) clearStrokes([...state.ink.keys()]); }
   else if(a==='backup') backupMenu();
@@ -1532,22 +1566,8 @@ function clearStrokes(pages){
   const undo=()=>{ for(const [p,list] of saved){ getInk(p).items.unshift(...list); saveInk(p); const pg=state.pages[p]; if(pg) drawInk(pg); } };
   redo(); pushUndo({undo,redo}); toast('書き込みを消しました（↶で戻せます）');
 }
-function showHelp(){
-  openSheet(`<h3>使い方</h3><p>
-  ✏️ <b>ペン</b>で解く → ⭕🔺❌ で丸つけ（もう一度タップで取り消し）。<br>
-  🔲 <b>問題わく</b>で1問ずつ囲んでおくと、間違えた問題だけを🔁<b>復習</b>で出し直せます。囲まずに丸をつけた場合は、ページごと復習に出ます。<br>
-  ❌🔺の問題は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。<br>
-  🟥 <b>赤シート</b>：「赤シート用」オレンジで書いた字や、赤い字が隠れます。<br>
-  ⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋見る でタップすると開きます。<br>
-  📝 <b>メモ</b>：計算用紙を出します。ページごとに保存されます。<br>
-  🤏 2本指で <b>拡大・縮小</b>。⋯ → <b>回転</b> でページの向きを変えられます。<br>
-  🪙 <b>コイン</b>：丸つけや勉強時間でたまり、🎁ごほうびと交換できます（おうちの人のパスコードが必要）。<br>
-  📄 ⋯ → 全ページの書き込みを消す で、何度でも新品から解き直せます。</p>
-  <button class="btn" style="width:100%" data-a="1">OK</button>`, close=>$('#sheet').querySelector('[data-a]').onclick=()=>close());
-}
-
 /* ================= library ================= */
-function showScreen(s){ if(s!=='main' && typeof ANS!=='undefined' && ANS.open) closeAnswer();
+function showScreen(s){ if(s!=='main' && typeof ANS!=='undefined' && ANS.open) closeAnswer(); if(s!=='main') $('#rotBar')?.classList.add('hidden');
   state.screen=s;
   $('#lib').classList.toggle('hidden', s!=='lib');
   $('#review').classList.toggle('hidden', !(s==='review'||s==='solve'));
@@ -1612,7 +1632,7 @@ $('#btnReview').onclick=()=>openReview();
 
 async function sha(buf){ const h=await crypto.subtle.digest('SHA-256', buf); return [...new Uint8Array(h)].slice(0,10).map(x=>x.toString(16).padStart(2,'0')).join(''); }
 $('#filePdf').onchange=async e=>{
-  const files=[...e.target.files]; e.target.value=''; let last=null;
+  const files=[...e.target.files]; e.target.value=''; let last=null, isNewBook=false;
   for(const f of files){
     try{
       toast(`「${f.name}」を読み込み中…`, 8000);
@@ -1620,7 +1640,7 @@ $('#filePdf').onchange=async e=>{
       const pdf=await pdfjsLib.getDocument({data:new Uint8Array(buf.slice(0)), ...PDF_OPTS}).promise;
       const aspects=[]; for(let i=1;i<=pdf.numPages;i++){ const pg=await pdf.getPage(i); const vp=pg.getViewport({scale:1}); aspects.push(vp.height/vp.width); }
       const name=f.name.replace(/\.pdf$/i,'');
-      const exist=await store.get('books', id);
+      const exist=await store.get('books', id); isNewBook=!exist;
       await store.put('files', id, buf);
       await store.put('books', id, {...(exist||{}), id, name: exist?.name || name, pages:pdf.numPages, aspects, added: exist?.added || Date.now(), lastOpened:Date.now()});
       pdf.destroy();
@@ -1629,7 +1649,7 @@ $('#filePdf').onchange=async e=>{
       last=id;
     }catch(err){ console.warn(err); toast(`「${f.name}」は開けませんでした（パスワード付きや壊れたPDFの可能性）`, 5000); }
   }
-  if(last){ toast('追加しました', 1200); if(files.length===1) openBook(last); else renderLib(); }
+  if(last){ toast('追加しました', 1200); if(files.length===1){ await openBook(last); if(isNewBook) openRotBar(true); } else renderLib(); }
 };
 
 /* ================= open book ================= */
@@ -3527,6 +3547,49 @@ $('#fileJson').onchange=async e=>{
     } else await restoreBackup(JSON.parse(await f.text()));
   }catch(err){ console.warn(err); toast('このファイルは読み込めませんでした'); }
 };
+
+/* ================= 📐 向きを合わせる（入れた直後に出る／⋯からいつでも） ================= */
+const ROT={scope:'all'};
+function openRotBar(first=false){
+  if(!state.book || state.viewOnly) return;
+  const bar=$('#rotBar'); bar.classList.remove('hidden'); ROT.scope = first ? 'all' : 'page';
+  renderRotBar(first);
+}
+function renderRotBar(first){
+  $('#rotBar').innerHTML=`<b>📐 向きを合わせる</b>${first?'<span class="s">書きやすい向きにしてから始めましょう</span>':''}<div class="sp"></div>
+    <div class="seg"><button data-r="all" class="${ROT.scope==='all'?'on':''}">全ページ</button><button data-r="page" class="${ROT.scope==='page'?'on':''}">このページ（${state.curPage+1}）</button></div>
+    <button class="pill" data-r="l">⟲ 左へ</button><button class="pill" data-r="rr">⟳ 右へ</button><button class="pill" data-r="u">↕ 上下</button>
+    <button class="pill" data-r="ok" style="background:var(--accent);color:#fff">✓ OK</button>`;
+}
+$('#rotBar').addEventListener('click', e=>{
+  const r=e.target.closest('button')?.dataset.r; if(!r) return;
+  if(r==='ok'){ $('#rotBar').classList.add('hidden'); return; }
+  if(r==='all'||r==='page'){ ROT.scope=r; renderRotBar(false); return; }
+  const list = ROT.scope==='all' ? state.pages.map(p=>p.i) : [state.curPage];
+  rotatePages(list, r==='l'?270:r==='u'?180:90);
+  renderRotBar(false);
+});
+
+/* ================= ❓ 使い方 ================= */
+const HELP=[
+  ['🚀','はじめに',`<ol><li>📚本棚で <b>＋ 問題集のPDFを入れる</b>。</li><li>入れた直後に出る <b>📐 向きを合わせる</b> で、書きやすい向きにする（あとから ⋯ でも変えられます）。</li><li>⋯ → <b>🔍 問題を自動で見つける</b> で、1問ずつのわくを作る（作れないPDFは🔲で囲む）。</li><li>✏️で解いて、⭕🔺❌で丸つけ。間違えた問題は🔁復習に出てきます。</li></ol>`],
+  ['✏️','書く・消す',`<ul><li>✏️ <b>ペン</b>・🖍 <b>マーカー</b>：色をタップで色と太さ。🎨でほかの色。</li><li>線を引いて<b>ペンを止める</b>と、まっすぐな線・まる・四角に整います。</li><li>🧽 <b>消しゴム</b>：なぞった線を消す。↶↷で戻す・やり直し。</li><li>➰ <b>かこむ</b>：囲んだものを動かす・大きさ・複製・消す。</li><li>🔤 <b>文字</b>：タップした所に文字。書いた文字をタップでなおす。</li><li>🌟 <b>スタンプ</b>：好きなスタンプをはる（もう一度タップではがす）。</li></ul>`],
+  ['↕️','すきま・メモ',`<ul><li>↕️ <b>すきま</b>：問題と問題のあいだをタップすると、方眼の書くスペースが入ります。すきまをタップで広さ変更・削除。</li><li>📝 <b>メモ</b>：計算用紙。上のつまみで動かし、右下で大きさを変えられます。ページごとに保存。</li></ul>`],
+  ['⭕','丸つけ・復習',`<ul><li>⭕🔺❌ で丸つけ（同じ所をもう一度タップで取り消し）。</li><li>🔲 <b>問題わく</b>があると、間違えた問題だけが🔁復習に出ます。</li><li>❌🔺は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。</li><li>📖 <b>答え</b>：答えのページを横に並べて表示。◀▶で合わせると、そのページの答えとして覚えます。</li></ul>`],
+  ['🟥','かくして覚える',`<ul><li>🟥 <b>赤シート</b>：赤い字・「赤シート用」オレンジで書いた字が隠れます。</li><li>⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋でタップすると開く。🙈で全部かくす／開く。</li></ul>`],
+  ['🔍','見る・動かす',`<ul><li>2本指で <b>拡大・縮小</b>（10倍まで）・移動。</li><li>✋ <b>見る</b>：指でスクロール。ページ番号をタップで好きなページへ。</li><li>⋯ → 🧰 で道具の列をかくすと、広く使えます。</li></ul>`],
+  ['🪙','コインとごほうび',`<ul><li>丸つけ・復習・勉強時間でコインがたまります。</li><li>🎁 <b>ごほうび</b>と交換するときは、おうちの人のパスコードが必要です。</li></ul>`],
+  ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
+  ['🎬','解説の録画（おうちの人）',`<ul><li>見守り画面で🎬を選び、説明したい所をタップ。</li><li>🖼 <b>のせる</b>：問題だけ・囲んだ範囲・ページ全体・写真をボードにのせる。</li><li>●で録画開始 → 書きながら話す（最大5分）→ ■ → 確かめて送る。</li></ul>`],
+  ['🖨','印刷・保存',`<ul><li>⋯ → <b>🖨 書き出し・印刷</b>：書きこみ入りPDFを保存・印刷。穴うめをオンにすると、紙で解き直す用に。</li><li>⋯ → <b>💾 バックアップ</b>：書きこみだけ／PDFも全部（引っ越し用）。</li><li>⋯ → <b>全ページの書き込みを消す</b> で、何度でも新品から解き直せます。</li></ul>`],
+  ['🆘','こまったとき',`<ul><li>書けない → 道具の列で✏️が選ばれているか確認。指で書くときは ⋯ →「指で書く」をオン。</li><li>ページが横向き → ⋯ → <b>📐 向きを合わせる</b>。</li><li>すきまのあるページは回転できません（すきまを消してから）。</li><li>通知が来ない → iPhoneの設定 → 通知 → トキノート がオンか確認。</li></ul>`],
+];
+function showHelp(open){
+  openSheet(`<h3>❓ 使い方</h3><div class="help">${HELP.map(([ic,t,body],i)=>`<details ${open===i||(!open&&i===0)?'open':''}><summary>${ic} ${t}</summary><div>${body}</div></details>`).join('')}</div>
+    <button class="btn" style="width:100%;margin-top:10px" data-a="1">とじる</button>`, close=>$('#sheet').querySelector('[data-a]').onclick=()=>close());
+}
+$('#btnHelp').onclick=()=>showHelp();
+$('#btnLibHelp').onclick=()=>showHelp();
 
 /* ================= boot ================= */
 guardStylus($('#pages'));
