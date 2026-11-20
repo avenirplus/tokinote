@@ -147,6 +147,19 @@ export class Family extends DurableObject {
       return json({ ok: true });
     }
     if (path === '/api/q/latest') { const v = this.meta('qlatest'); return v ? new Response(v, { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } }) : json({}, 404); }
+    // 📺 画面共有のつなぎ先（STUNは無料。TURNのキーがSecretにあれば、中継も使えるようにする）
+    if (path === '/api/ice') {
+      const stun = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+      if (!this.env.TURN_KEY_ID || !this.env.TURN_KEY_TOKEN) return json({ iceServers: stun, turn: false });
+      try {
+        const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${this.env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
+          method: 'POST', headers: { Authorization: `Bearer ${this.env.TURN_KEY_TOKEN}`, 'content-type': 'application/json' }, body: JSON.stringify({ ttl: 86400 }) });
+        if (!r.ok) throw new Error('turn ' + r.status);
+        const j = await r.json();
+        const ice = (j.iceServers || []).map(sv => ({ ...sv, urls: [].concat(sv.urls).filter(u => !/:53(\?|$)/.test(u)) })).filter(sv => sv.urls.length);
+        return json({ iceServers: ice.length ? ice : stun, turn: true });
+      } catch { return json({ iceServers: stun, turn: false }); }
+    }
     if (path === '/api/push/key') { const v = await this.vapid(); return json({ key: v.pub }); }
     if (path === '/api/push/sub' && request.method === 'POST') {
       let b; try { b = await request.json(); } catch { return json({ ok: false }, 400); }

@@ -176,6 +176,16 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
 #qBar.hidden{display:none}
+#scrBadge{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:950;display:flex;align-items:center;gap:10px;background:#e11d48;color:#fff;padding:8px 10px 8px 16px;border-radius:999px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#scrBadge button{background:#fff;color:#e11d48;border-radius:999px;padding:6px 12px;font-weight:800}
+#scrView{position:fixed;inset:0;z-index:960;background:#111;display:flex;flex-direction:column}
+#scrView .scrHead{display:flex;align-items:center;gap:8px;padding:8px 10px;padding-top:max(8px,env(safe-area-inset-top));background:#222;color:#fff;flex-wrap:wrap}
+#scrView .scrHead .s{font-size:12px;color:#ccc}
+#scrView .scrHead .ib{color:#fff}
+#scrView .scrHead .pill{background:#444;color:#fff}
+#scrView .scrBody{flex:1;overflow:hidden;display:flex;align-items:center;justify-content:center;touch-action:none}
+#scrView video{max-width:100%;max-height:100%;transform-origin:center;background:#000}
+#btnLibScr.live{background:#fff3c4;outline:2px solid #f5b400}
 @media (max-width:700px){
   #top{overflow-x:auto;overflow-y:hidden;scrollbar-width:none;flex-wrap:nowrap}
   #top::-webkit-scrollbar{display:none}
@@ -307,7 +317,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
   </header>
   <div id="rotBar" class="hidden"></div>
   <div id="viewBar" class="hidden"><span id="viewText"></span><div class="sp"></div>
-    <button id="viewFollow" class="pill">ついていく</button><button id="viewExit" class="pill">おわる</button></div>
+    <button id="viewScr" class="pill hidden" style="background:#fff3c4">📺 画面</button><button id="viewFollow" class="pill">ついていく</button><button id="viewExit" class="pill">おわる</button></div>
   <div id="mainArea">
     <main id="viewer"><div id="pages"></div></main>
     <div id="memo" class="hidden">
@@ -342,6 +352,7 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
     <button id="btnLibReview" class="big sub">🔁 間違えた問題の復習 <span id="libDue"></span></button>
     <button id="btnLibReward" class="big sub">🎁 ごほうび（🪙 <span id="libCoin">0</span>）</button>
     <button id="btnLibPush" class="big sub hidden">🔔 しつもん通知をこの端末で受け取る</button>
+    <button id="btnLibScr" class="big sub hidden">📺 パソコンの画面を見せる</button>
     <button id="btnLibWatch" class="big sub hidden">👀 見守る（ほかの端末で書いている様子を見る）</button>
     <div id="todayBox" class="note"></div>
     <h2>本棚</h2>
@@ -597,7 +608,7 @@ const Live = {
     try{
       const u=new URL('api/live', location.href); u.protocol = u.protocol==='https:'?'wss:':'ws:';
       const ws=new WebSocket(u); this.ws=ws;
-      ws.onopen=()=>{ this.open=true; this.retry=0; if(state.viewOnly) this.send({t:'hello'}); else sendCur(); };
+      ws.onopen=()=>{ this.open=true; this.retry=0; if(state.viewOnly) this.send({t:'hello'}); else sendCur(); this.send({t:'scr', k:'ask'}); if(typeof scrAnnounce==='function') scrAnnounce(); };
       ws.onmessage=e=>{ let m; try{ m=JSON.parse(e.data); }catch{ return; } onLiveMsg(m); };
       ws.onclose=()=>{ this.open=false; this.ws=null; const d=Math.min(30000, 1000*2**this.retry++); setTimeout(()=>this.connect(), d); };
       ws.onerror=()=>{ try{ ws.close(); }catch{} };
@@ -1614,7 +1625,7 @@ async function renderLib(){
     if(books.some(x=>x.id===b) || cloudBooks.has(b) || !sh.name) continue;
     h+=`<div class="card ghost"><div style="font-size:30px">☁️</div><div class="grow"><div class="t">${esc(sh.name)}</div><div class="m">クラウドに書き込みがあります。同じPDFを入れると戻ります</div></div></div>`;
   }
-  $('#btnLibWatch').classList.toggle('hidden', Cloud.mode!=='cf');
+  $('#btnLibWatch').classList.toggle('hidden', Cloud.mode!=='cf'); if(typeof renderScrList==='function') renderScrList();
   $('#btnLibPush').classList.toggle('hidden', Cloud.mode!=='cf' || !!state.settings.pushOn);
   $('#bookList').innerHTML = h || `<p class="note">まだ問題集がありません。「＋ 問題集のPDFを入れる」から追加してください。</p>`;
   $('#saveNote').innerHTML = Cloud.mode==='cf'
@@ -2095,6 +2106,7 @@ async function onLiveMsg(m){
     }
     return;
   }
+  if(m.t==='scr'){ scrOnMsg(m); return; }
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
   if(m.L && m.L!==state.learner) return;
@@ -3601,6 +3613,115 @@ function showHelp(open){
 }
 $('#btnHelp').onclick=()=>showHelp();
 $('#btnLibHelp').onclick=()=>showHelp();
+
+/* ================= 📺 画面共有（パソコン → 見守る人）：WebRTCで直接つなぐ。合図はいつもの見守りの通り道を使う ================= */
+const SCR={me:uid('d'), stream:null, pcs:new Map(), avail:new Map(), view:null, ice:null};
+async function scrIce(){ if(SCR.ice) return SCR.ice; try{ const j=await (await api('api/ice')).json(); SCR.ice=j.iceServers; }catch{ SCR.ice=[{urls:'stun:stun.cloudflare.com:3478'}]; } return SCR.ice; }
+const canShareScreen = () => !!navigator.mediaDevices?.getDisplayMedia && !isIOS();
+// 見せる側
+async function scrStart(){
+  if(Cloud.mode!=='cf'){ toast('画面共有は、Cloudflare版で使えます'); return; }
+  if(!canShareScreen()){
+    await openSheet(`<h3>📺 この端末からは画面を見せられません</h3><p>iPad・iPhoneのブラウザは、ほかのアプリの画面を送れない決まりになっています。</p>
+      <p><b>iPadのとき</b>：おうちの人のiPhoneからFaceTimeをかけて、子どもが通話画面の「画面共有」をタップしてください。</p>
+      <p><b>パソコンのとき</b>：ChromeかEdgeでトキノートを開くと使えます。</p><button class="btn" style="width:100%" data-a="1">わかった</button>`, close=>$('#sheet [data-a]').onclick=()=>close());
+    return;
+  }
+  try{ SCR.stream=await navigator.mediaDevices.getDisplayMedia({video:{frameRate:{ideal:12, max:15}, width:{max:1920}, height:{max:1080}}, audio:false}); }
+  catch(e){ toast(e?.name==='NotAllowedError'?'画面共有をやめました':'画面共有を始められませんでした'); return; }
+  SCR.stream.getVideoTracks()[0].addEventListener('ended', ()=>scrStop());
+  try{ SCR.stream.getVideoTracks()[0].contentHint='detail'; }catch{}
+  scrAnnounce(); renderScrBadge();
+  toast('📺 画面を見せています。このタブは開いたまま、ほかのアプリで勉強してOK', 4000);
+}
+function scrStop(){
+  SCR.stream?.getTracks().forEach(t=>t.stop()); SCR.stream=null;
+  for(const pc of SCR.pcs.values()) try{ pc.close(); }catch{}
+  SCR.pcs.clear(); Live.send({t:'scr', k:'avail', id:SCR.me, on:false}); renderScrBadge();
+}
+function scrAnnounce(){ if(SCR.stream) Live.send({t:'scr', k:'avail', id:SCR.me, on:true, L:state.learner, who:state.learners.find(l=>l.id===state.learner)?.name||'子ども'}); }
+async function scrServe(viewer){
+  if(!SCR.stream) return;
+  SCR.pcs.get(viewer)?.close();
+  const pc=new RTCPeerConnection({iceServers:await scrIce()}); SCR.pcs.set(viewer, pc);
+  for(const t of SCR.stream.getTracks()) pc.addTrack(t, SCR.stream);
+  pc.onicecandidate=e=>{ if(e.candidate) Live.send({t:'scr', k:'ice', from:SCR.me, to:viewer, c:e.candidate}); };
+  pc.onconnectionstatechange=()=>{ if(['failed','closed'].includes(pc.connectionState)){ SCR.pcs.delete(viewer); renderScrBadge(); } else renderScrBadge(); };
+  // 文字がつぶれないよう、画質を優先
+  try{ const snd=pc.getSenders()[0]; const pr=snd.getParameters(); pr.degradationPreference='maintain-resolution'; pr.encodings=pr.encodings?.length?pr.encodings:[{}]; pr.encodings[0].maxBitrate=2500000; await snd.setParameters(pr); }catch{}
+  const offer=await pc.createOffer(); await pc.setLocalDescription(offer);
+  Live.send({t:'scr', k:'offer', from:SCR.me, to:viewer, sdp:pc.localDescription});
+}
+function renderScrBadge(){
+  let b=$('#scrBadge');
+  if(!SCR.stream){ b?.remove(); return; }
+  if(!b){ b=document.createElement('div'); b.id='scrBadge'; document.body.appendChild(b); b.onclick=e=>{ if(e.target.closest('button')) scrStop(); }; }
+  const n=[...SCR.pcs.values()].filter(pc=>pc.connectionState==='connected').length;
+  b.innerHTML=`<span>📺 画面を見せています${n?`（${n}人が見ています）`:''}</span><button>■ やめる</button>`;
+}
+// 見る側
+function scrOpen(id){
+  const a=SCR.avail.get(id); if(!a) return;
+  scrCloseView();
+  const ov=document.createElement('div'); ov.id='scrView';
+  ov.innerHTML=`<div class="scrHead"><b>📺 ${esc(a.who)} の画面</b><span id="scrState" class="s">つないでいます…</span><div class="sp"></div><button class="pill" data-v="fit">全体</button><button class="pill" data-v="full">⛶ 大きく</button><button class="ib" data-v="x">✕</button></div>
+    <div class="scrBody"><video id="scrVideo" autoplay playsinline muted></video></div>`;
+  document.body.appendChild(ov);
+  const vid=$('#scrVideo'); let z=1, px=0, py=0;
+  const apply=()=>{ vid.style.transform=`translate(${px}px,${py}px) scale(${z})`; };
+  ov.querySelector('.scrHead').onclick=e=>{ const v=e.target.closest('button')?.dataset.v; if(v==='x') scrCloseView(); else if(v==='full'){ (ov.requestFullscreen||ov.webkitRequestFullscreen)?.call(ov); } else if(v==='fit'){ z=1; px=py=0; apply(); } };
+  // 2本指で拡大、1本指で移動（拡大しているとき）
+  const body=ov.querySelector('.scrBody'); let pin=null, drag=null;
+  body.addEventListener('touchstart', e=>{ if(e.touches.length===2){ const [a,b]=e.touches; pin={d:Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY), z}; } else if(e.touches.length===1 && z>1){ drag={x:e.touches[0].clientX-px, y:e.touches[0].clientY-py}; } }, {passive:true});
+  body.addEventListener('touchmove', e=>{ if(pin && e.touches.length===2){ e.preventDefault(); const [a,b]=e.touches; z=Math.max(1,Math.min(5,pin.z*Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY)/pin.d)); apply(); } else if(drag && e.touches.length===1){ e.preventDefault(); px=e.touches[0].clientX-drag.x; py=e.touches[0].clientY-drag.y; apply(); } }, {passive:false});
+  body.addEventListener('touchend', e=>{ if(e.touches.length<2) pin=null; if(!e.touches.length) drag=null; if(z<=1.01){ z=1; px=py=0; apply(); } });
+  body.addEventListener('wheel', e=>{ e.preventDefault(); z=Math.max(1,Math.min(5,z*(e.deltaY<0?1.15:0.87))); if(z===1){ px=py=0; } apply(); }, {passive:false});
+  SCR.view={id, pc:null, ov};
+  Live.send({t:'scr', k:'want', from:SCR.me, to:id});
+  setTimeout(()=>{ if(SCR.view?.id===id && !SCR.view.pc) $('#scrState').textContent='つながりません。見せる側のパソコンでトキノートのタブが開いているか確かめてください'; }, 8000);
+}
+function scrCloseView(){ if(!SCR.view) return; try{ SCR.view.pc?.close(); }catch{} SCR.view.ov?.remove(); SCR.view=null; }
+async function scrOnOffer(m){
+  if(!SCR.view || SCR.view.id!==m.from) return;
+  try{ SCR.view.pc?.close(); }catch{}
+  const pc=new RTCPeerConnection({iceServers:await scrIce()}); SCR.view.pc=pc;
+  pc.ontrack=e=>{ const v=$('#scrVideo'); if(v){ v.srcObject=e.streams[0]||new MediaStream([e.track]); v.play?.().catch(()=>{}); } };
+  pc.onicecandidate=e=>{ if(e.candidate) Live.send({t:'scr', k:'ice', from:SCR.me, to:m.from, c:e.candidate}); };
+  pc.onconnectionstatechange=()=>{ const s=$('#scrState'); if(!s) return;
+    s.textContent = {connected:'', connecting:'つないでいます…', failed:'つながりませんでした（回線の相性）。同じWi-Fiならつながります。くわしくは README の「画面共有がつながらないとき」', disconnected:'とぎれました…'}[pc.connectionState] ?? ''; };
+  await pc.setRemoteDescription(m.sdp); const ans=await pc.createAnswer(); await pc.setLocalDescription(ans);
+  Live.send({t:'scr', k:'answer', from:SCR.me, to:m.from, sdp:pc.localDescription});
+}
+function scrOnMsg(m){
+  if(m.to && m.to!==SCR.me) return;
+  if(m.k==='avail'){
+    if(m.on){ const had=SCR.avail.has(m.id); SCR.avail.set(m.id, {who:m.who||'子ども', L:m.L, at:Date.now()}); if(!had && !SCR.stream) toast(`📺 ${m.who||'子ども'} が画面を見せています。本棚の「📺 画面を見る」から見られます`, 4000); }
+    else { SCR.avail.delete(m.id); if(SCR.view?.id===m.id){ $('#scrState') && ($('#scrState').textContent='画面共有が終わりました'); } }
+    renderScrList(); return;
+  }
+  if(m.k==='ask'){ scrAnnounce(); return; }
+  if(m.k==='want'){ scrServe(m.from); return; }
+  if(m.k==='offer'){ scrOnOffer(m); return; }
+  if(m.k==='answer'){ SCR.pcs.get(m.from)?.setRemoteDescription(m.sdp).catch(()=>{}); return; }
+  if(m.k==='ice'){ const pc = SCR.pcs.get(m.from) || (SCR.view?.id===m.from ? SCR.view.pc : null); pc?.addIceCandidate(m.c).catch(()=>{}); return; }
+}
+function renderScrList(){
+  const btn=$('#btnLibScr'); if(!btn) return;
+  const n=SCR.avail.size; btn.classList.toggle('hidden', Cloud.mode!=='cf');
+  btn.innerHTML = SCR.stream ? '📺 画面を見せています（■ やめる）' : n ? `📺 画面を見る（${[...SCR.avail.values()].map(a=>esc(a.who)).join('・')}）` : '📺 パソコンの画面を見せる';
+  btn.classList.toggle('live', n>0 && !SCR.stream);
+  const vb=$('#viewScr'); if(vb) vb.classList.toggle('hidden', !n);
+}
+async function scrLibClick(){
+  if(SCR.stream){ scrStop(); renderScrList(); return; }
+  if(SCR.avail.size===1){ scrOpen([...SCR.avail.keys()][0]); return; }
+  if(SCR.avail.size>1){ const id=await openSheet(`<h3>📺 だれの画面を見る？</h3>${[...SCR.avail.entries()].map(([id,a])=>`<button class="opt" data-id="${id}"><span>${esc(a.who)}</span><span>📺</span></button>`).join('')}`, close=>$('#sheet').querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>close(b.dataset.id))); if(id) scrOpen(id); return; }
+  await scrStart(); renderScrList();
+}
+$('#btnLibScr').onclick=scrLibClick;
+$('#viewScr').onclick=()=>{ SCR.avail.size ? scrLibClick() : toast('いま画面を見せている端末はありません'); };
+// つないだら、見せている端末に名のってもらう
+setTimeout(()=>Live.send({t:'scr', k:'ask'}), 2500);
 
 /* ================= boot ================= */
 guardStylus($('#pages'));
