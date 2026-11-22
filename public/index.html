@@ -178,6 +178,8 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #qBar.hidden{display:none}
 #snapChip{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:.2s;z-index:940;display:flex;align-items:center;gap:8px;background:#1d2330;color:#fff;padding:6px 6px 6px 14px;border-radius:999px;font-size:14px;font-weight:700}
 #snapChip.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+body.viewing .ov .advX{position:absolute;top:-14px;right:-14px;width:28px;height:28px;border-radius:50%;background:#e11d48;color:#fff;font-size:14px;font-weight:900;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:auto;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;line-height:1}
+body.viewing .ov>.advX.free{top:auto;right:auto;left:calc(var(--x) * var(--u) * 1px - 14px);top:calc(var(--y) * var(--u) * 1px - 14px)}
 #snapChip button{background:#fff;color:#1d2330;border-radius:999px;padding:6px 12px;font-weight:800}
 #scrBadge{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:950;display:flex;align-items:center;gap:10px;background:#e11d48;color:#fff;padding:8px 10px 8px 16px;border-radius:999px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #scrBadge button{background:#fff;color:#e11d48;border-radius:999px;padding:6px 12px;font-weight:800}
@@ -1042,10 +1044,10 @@ function finishCur(c, cancel, ev){
 function abortCur(){ if(!cur) return; if(cur.kind==='tapTool'){ cur=null; return; } if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
 function eraseAt(c, pt){
   const items=c.T.items(); let ch=false;
-  const all=kErasing();
+  const all=!!c.T.eraseAll;
   for(let i=items.length-1;i>=0;i--){ const it=items[i];
     if(it.k==='s'){ if(hitStroke(it.v2?it.it:it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
-    else if(all && (it.k==='tx'||it.k==='st')){ const b=itemBox(it); if(pt.x>=b.x0-ERASE_R && pt.x<=b.x1+ERASE_R && pt.y>=b.y0-ERASE_R && pt.y<=b.y1+ERASE_R){ items.splice(i,1); c.removed.push(it); ch=true; } }
+    else if(all && ['tx','st','im','au','lec','vid'].includes(it.k)){ const b=itemBox(it); if(pt.x>=b.x0-ERASE_R && pt.x<=b.x1+ERASE_R && pt.y>=b.y0-ERASE_R && pt.y<=b.y1+ERASE_R){ items.splice(i,1); c.removed.push(it); ch=true; } }
   }
   if(ch) c.T.inkRedraw();
 }
@@ -1259,12 +1261,13 @@ function renderOverlay(pg){
   renderSel(pg);
   if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k!=='tx') continue;
     const d=document.createElement('div'); d.className='advtx'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
-    d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--fs:${t.fs};--c:${t.c}`; d.textContent=t.text; ov.appendChild(d); }
+    d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--fs:${t.fs};--c:${t.c}`; d.textContent=t.text; ov.appendChild(d); advDelBtn(pg, t, d); }
   if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k!=='im') continue;
     const d=document.createElement('img'); d.className='advimg'; d.dataset.id=t.id; const pt=toD(pg.g,t.x,t.y);
     d.style.cssText=`--x:${pt.x};--y:${pt.y};--w:${t.w};--h:${t.h}`; d.alt='';
-    imgURL(t.img).then(u=>{ if(u) d.src=u; }); ov.appendChild(d); }
-  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k==='au') ov.appendChild(audBubble(pg, t)); if(t.k==='lec') ov.appendChild(lecBubble(pg, t)); if(t.k==='vid') ov.appendChild(vidBubble(pg, t)); }
+    imgURL(t.img).then(u=>{ if(u) d.src=u; }); ov.appendChild(d); advDelBtn(pg, t, null, {x:pt.x+t.w, y:pt.y}); }
+  if(!state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ const el = t.k==='au' ? audBubble(pg, t) : t.k==='lec' ? lecBubble(pg, t) : t.k==='vid' ? vidBubble(pg, t) : null; if(el){ ov.appendChild(el); advDelBtn(pg, t, el); } }
+  if(state.viewOnly && !state.advHidden) for(const t of (state.adv.get(p)?.items||[])){ if(t.k==='st'){ const d=toD(pg.g,t.x,t.y); advDelBtn(pg, t, null, {x:d.x+(t.tx?t.s*1.6:t.s*.6), y:d.y-t.s*.5}); } }
 }
 function addDel(d, fn){ const x=document.createElement('div'); x.className='del'; x.textContent='×'; x.addEventListener('pointerdown', e=>{ e.stopPropagation(); e.preventDefault(); fn(); }); d.appendChild(x); }
 function removeShared(list, obj, p){
@@ -1289,7 +1292,7 @@ function pageTarget(pg){
     drawLive(ctx,item){ const d=pg.liveD; if(d && d===pg.detail) drawOnPage(ctx,[item],pg.g,detailK(pg),d.rect.x*d.r,d.rect.y*d.r); else drawOnPage(ctx,[item],pg.g,pg.px); },
     items:()=> state.viewOnly && !kErasing() ? getAdv(p).items : getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
     inkRedraw:()=>{ drawInk(pg); renderOverlay(pg); if(state.viewOnly && !kErasing()) saveAdv(p); },
-    afterEdit:()=>{ if(!state.viewOnly) saveInk(p); },
+    afterEdit:()=>{ if(!state.viewOnly) saveInk(p); }, eraseAll:true,
     addStroke(item){
       if(state.viewOnly){ // おうちの人のアドバイス
         const a=getAdv(p); a.items.push(item); drawInk(pg); saveAdv(p);
@@ -1307,10 +1310,10 @@ function pageTarget(pg){
         pushUndo({undo:()=>{ parentInkAdd(p, list, 'page'); drawInk(pg); renderOverlay(pg); },
                   redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); renderOverlay(pg); parentInkDel(p, list, 'page'); }}); return; }
       if(state.viewOnly){ saveAdv(p);
-        pushUndo({undo:()=>{ getAdv(p).items.push(...list); drawInk(pg); saveAdv(p); },
+        pushUndo({undo:()=>{ getAdv(p).items.push(...list); drawInk(pg); renderOverlay(pg); saveAdv(p); },
                   redo:()=>{ const a=getAdv(p); a.items=a.items.filter(it=>!list.includes(it)); drawInk(pg); saveAdv(p); }}); return; }
-      saveInk(p);
-      pushUndo({undo:()=>{ getInk(p).items.push(...list); drawInk(pg); saveInk(p); },
+      saveInk(p); if(list.some(it=>it.k!=='s')) renderOverlay(pg);
+      pushUndo({undo:()=>{ getInk(p).items.push(...list); drawInk(pg); renderOverlay(pg); saveInk(p); },
                 redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); saveInk(p); }});
     },
     stamp(pt, m, e){ stampAt(pg, pt, m, e); },
@@ -2283,16 +2286,17 @@ function renderAdvTools(){
   if(hid){ $('#advTools').innerHTML=`<button class="tool on" data-ashow="1">${ICON[t]||'✋'}<small>道具を出す</small></button>`; document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase')); return; }
   $('#advTools').innerHTML = `<button class="advHide" data-ahide="1">▾ かくす</button><div class="advRow1"><span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す') + B('akerase','🧹','子の字を消す')
     + `<button class="tool" data-react="1">👏<small>リアクション</small></button></div><div class="advRow2">` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
-    + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button></div>`;
+    + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button><button class="ib" data-bulk="1" title="まとめて消す">🗑</button></div>`;
   document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'||t==='akerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
   if(b.dataset.react){ sendReaction(); return; }
+  if(b.dataset.bulk){ advBulkDelete(); return; }
   if(b.dataset.ahide||b.dataset.ashow){ state.settings.advHidden=!!b.dataset.ahide; saveMeta(); renderAdvTools(); return; }
   if(b.dataset.at==='astamp'){ pickSticker(true).then(ok=>{ if(ok){ state.advTool='astamp'; renderAdvTools(); toast(`${state.sticker.e} をはりたい場所をタップ`, 2000); } }); return; }
   if(b.dataset.at==='aping') toast('👆 見てほしい場所をタップすると、子どもの画面でそこが光ります', 2600);
-  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='akerase') toast('🧹 子どもの書きこみ（線・文字・スタンプ）をなぞって消します。子どもの画面からも消えます。↶で戻せます', 3200); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='akerase') toast('🧹 子どもの書きこみ（線・文字・スタンプ）をなぞって消します。子どもの画面からも消えます。↶で戻せます', 3200); if(b.dataset.at==='aerase') toast('🧽 アドバイス（線・文字・画像・音声・解説・スタンプ）をなぞって消します。1つだけなら右上の✕', 3000); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
 });
@@ -3104,6 +3108,8 @@ function showSnapChip(kind, revert){
 // 投げ縄
 const pip=(poly,x,y)=>{ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; };
 function itemBox(it){
+  if(it.k==='im') return {x0:it.x, y0:it.y, x1:it.x+it.w, y1:it.y+it.h};
+  if(it.k==='au'||it.k==='lec'||it.k==='vid') return {x0:it.x-700, y0:it.y-250, x1:it.x+700, y1:it.y+250};
   if(it.k==='s'){ const b=bbox(it); return {x0:b.x0-it.w/2, y0:b.y0-it.w/2, x1:b.x1+it.w/2, y1:b.y1+it.w/2}; }
   const r = it.k==='tx' ? null : (it.s||600)*(it.tx?1.6:.6);
   if(it.k==='tx') return {x0:it.x, y0:it.y, x1:it.x+it.w, y1:it.y+it.fs*2.4};
@@ -3670,13 +3676,13 @@ $('#rotBar').addEventListener('click', e=>{
 /* ================= ❓ 使い方 ================= */
 const HELP=[
   ['🚀','はじめに',`<ol><li>📚本棚で <b>＋ 問題集のPDFを入れる</b>。</li><li>入れた直後に出る <b>📐 向きを合わせる</b> で、書きやすい向きにする（あとから ⋯ でも変えられます）。</li><li>⋯ → <b>🔍 問題を自動で見つける</b> で、1問ずつのわくを作る（作れないPDFは🔲で囲む）。</li><li>✏️で解いて、⭕🔺❌で丸つけ。間違えた問題は🔁復習に出てきます。</li></ol>`],
-  ['✏️','書く・消す',`<ul><li>✏️ <b>ペン</b>・🖍 <b>マーカー</b>：色をタップで色と太さ。🎨でほかの色。</li><li>✨ 大きめに書いた<b>まる・三角・四角・線</b>と<b>点</b>は、書き終えると自動できれいになります（文字はそのまま）。すぐ出る「手書きにもどす」で戻せます。⋯ でオフにもできます。</li><li>小さい図形は、書いたあと<b>ペンを止める</b>と整います。</li><li>🧽 <b>消しゴム</b>：なぞった線を消す。↶↷で戻す・やり直し。</li><li>➰ <b>かこむ</b>：囲んだものを動かす・大きさ・複製・消す。</li><li>🔤 <b>文字</b>：タップした所に文字。書いた文字をタップでなおす。</li><li>🌟 <b>スタンプ</b>：好きなスタンプをはる（もう一度タップではがす）。</li></ul>`],
+  ['✏️','書く・消す',`<ul><li>✏️ <b>ペン</b>・🖍 <b>マーカー</b>：色をタップで色と太さ。🎨でほかの色。</li><li>✨ 大きめに書いた<b>まる・三角・四角・線</b>と<b>点</b>は、書き終えると自動できれいになります（文字はそのまま）。すぐ出る「手書きにもどす」で戻せます。⋯ でオフにもできます。</li><li>小さい図形は、書いたあと<b>ペンを止める</b>と整います。</li><li>🧽 <b>消しゴム</b>：なぞった線・文字・スタンプを消す（丸つけは消えません）。↶↷で戻す・やり直し。</li><li>➰ <b>かこむ</b>：囲んだものを動かす・大きさ・複製・消す。</li><li>🔤 <b>文字</b>：タップした所に文字。書いた文字をタップでなおす。</li><li>🌟 <b>スタンプ</b>：好きなスタンプをはる（もう一度タップではがす）。</li></ul>`],
   ['↕️','すきま・メモ',`<ul><li>↕️ <b>すきま</b>：問題と問題のあいだをタップすると、方眼の書くスペースが入ります。すきまをタップで広さ変更・削除。</li><li>📝 <b>メモ</b>：計算用紙。上のつまみで動かし、右下で大きさを変えられます。ページごとに保存。</li></ul>`],
   ['⭕','丸つけ・復習',`<ul><li>⭕🔺❌ で丸つけ（同じ所をもう一度タップで取り消し）。</li><li>🔲 <b>問題わく</b>があると、間違えた問題だけが🔁復習に出ます。</li><li>❌🔺は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。</li><li>📖 <b>答え</b>：答えのページを横に並べて表示。◀▶で合わせると、そのページの答えとして覚えます。</li></ul>`],
   ['🟥','かくして覚える',`<ul><li>🟥 <b>赤シート</b>：赤い字・「赤シート用」オレンジで書いた字が隠れます。</li><li>⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋でタップすると開く。🙈で全部かくす／開く。</li></ul>`],
   ['🔍','見る・動かす',`<ul><li>2本指で <b>拡大・縮小</b>（10倍まで）・移動。</li><li>✋ <b>見る</b>：指でスクロール。ページ番号をタップで好きなページへ。</li><li>⋯ → 🧰 で道具の列をかくすと、広く使えます。</li></ul>`],
   ['🪙','コインとごほうび',`<ul><li>丸つけ・復習・勉強時間でコインがたまります。</li><li>🎁 <b>ごほうび</b>と交換するときは、おうちの人のパスコードが必要です。</li></ul>`],
-  ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。🧹<b>子の字を消す</b>で、子どもの落書きや書きこみを消せます（子どもの画面からも消え、↶で戻せます）。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
+  ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。🧹<b>子の字を消す</b>で、子どもの落書きや書きこみを消せます（子どもの画面からも消え、↶で戻せます）。</li><li>アドバイスを消す：コメント・音声・解説・画像・スタンプの右上の <b>✕</b> をタップ（すぐ出る「↶ もどす」で戻せる）。🧽でなぞっても消せます。道具の列の <b>🗑</b> で、このページのアドバイス／子どもの書きこみをまとめて消せます。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
   ['🎬','解説の録画（おうちの人）',`<ul><li>見守り画面で🎬を選び、説明したい所をタップ。</li><li>🖼 <b>のせる</b>：問題だけ・囲んだ範囲・ページ全体・写真をボードにのせる。</li><li>●で録画開始 → 書きながら話す（最大5分）→ ■ → 確かめて送る。</li></ul>`],
   ['🖨','印刷・保存',`<ul><li>⋯ → <b>🖨 書き出し・印刷</b>：書きこみ入りPDFを保存・印刷。穴うめをオンにすると、紙で解き直す用に。</li><li>⋯ → <b>💾 バックアップ</b>：書きこみだけ／PDFも全部（引っ越し用）。</li><li>⋯ → <b>全ページの書き込みを消す</b> で、何度でも新品から解き直せます。</li></ul>`],
   ['🆘','こまったとき',`<ul><li>書けない → 道具の列で✏️が選ばれているか確認。指で書くときは ⋯ →「指で書く」をオン。</li><li>ページが横向き → ⋯ → <b>📐 向きを合わせる</b>。</li><li>すきまのあるページは回転できません（すきまを消してから）。</li><li>通知が来ない → iPhoneの設定 → 通知 → トキノート がオンか確認。</li></ul>`],
@@ -3821,6 +3827,45 @@ function applyInkOp(m){
   saveInk(m.p); const pg=state.pages[m.p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } if(m.area==='memo') drawMemo();
 }
 const kErasing = () => state.viewOnly && state.advTool==='akerase';
+
+/* ================= 🗑 消すのをかんたんに ================= */
+// 消したあと、すぐ「もどす」を出す
+function showUndoChip(text){
+  let d=$('#snapChip'); if(!d){ d=document.createElement('div'); d.id='snapChip'; document.body.appendChild(d); }
+  d.innerHTML=`<span>${text}</span><button>↶ もどす</button>`; d.classList.add('on');
+  d.querySelector('button').onclick=()=>{ doUndo(); d.classList.remove('on'); };
+  clearTimeout(showSnapChip.t); showSnapChip.t=setTimeout(()=>d.classList.remove('on'), 3500);
+}
+// おうちの人：アドバイスの右上の✕
+function advDelBtn(pg, t, host, pos){
+  if(!state.viewOnly) return;
+  const x=document.createElement('button'); x.className='advX'; x.textContent='✕'; x.setAttribute('aria-label','このアドバイスを消す');
+  if(pos){ x.classList.add('free'); x.style.cssText=`--x:${pos.x};--y:${pos.y}`; }
+  x.addEventListener('pointerdown', e=>e.stopPropagation());
+  x.addEventListener('click', e=>{ e.stopPropagation(); e.preventDefault(); advReplace(pg.i, t, null); showUndoChip('🗑 消しました'); });
+  (host||pg.ov).appendChild(x);
+}
+// おうちの人：まとめて消す
+async function advBulkDelete(){
+  const p=state.curPage, pg=state.pages[p]; if(!pg) return;
+  const adv=getAdv(p).items, ink=getInk(p).items;
+  const nA=adv.length, nI=ink.filter(it=>it.k!=='m').length;
+  const r=await openSheet(`<h3>🗑 ${p+1}ページをまとめて消す</h3>
+    <button class="opt" data-a="adv" ${nA?'':'disabled'}><span>おうちの人のアドバイスを全部<br><span class="s">線・文字・画像・音声・解説・スタンプ（${nA}こ）</span></span><span>💬</span></button>
+    <button class="opt" data-a="ink" ${nI?'':'disabled'}><span>子どもの書きこみを全部<br><span class="s">線・文字・スタンプ（${nI}こ）。丸つけは残ります</span></span><span>✏️</span></button>
+    <p class="note" style="margin-top:8px">1つずつ消すときは、アドバイスの右上の ✕ をタップ。🧽／🧹でなぞっても消せます。</p>`,
+    close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a)));
+  if(r==='adv'){
+    const before=adv.slice(), a=getAdv(p);
+    const redo=()=>{ a.items=[]; saveAdv(p); drawInk(pg); renderOverlay(pg); }, undo=()=>{ a.items=before.slice(); saveAdv(p); drawInk(pg); renderOverlay(pg); };
+    redo(); pushUndo({undo,redo}); showUndoChip(`🗑 アドバイスを${nA}こ消しました`);
+  } else if(r==='ink'){
+    const list=ink.filter(it=>it.k!=='m'); const rec=getInk(p);
+    const redo=()=>{ rec.items=rec.items.filter(it=>!list.includes(it)); drawInk(pg); renderOverlay(pg); parentInkDel(p, list, 'page'); };
+    const undo=()=>{ parentInkAdd(p, list, 'page'); drawInk(pg); renderOverlay(pg); };
+    redo(); pushUndo({undo,redo}); showUndoChip(`🗑 子どもの書きこみを${nI}こ消しました`);
+  }
+}
 
 /* ================= boot ================= */
 guardStylus($('#pages'));
