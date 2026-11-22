@@ -1543,9 +1543,9 @@ $('#btnMaskAll').onclick=()=>{
 };
 
 /* ================= sheet / dialogs ================= */
-function openSheet(html, bind){
+function openSheet(html, bind, opt={}){
   $('#sheet').innerHTML=html; $('#veil').classList.remove('hidden');
-  return new Promise(res=>{ const close=v=>{ $('#veil').classList.add('hidden'); res(v); }; bind?.(close); $('#veil').onclick=e=>{ if(e.target.id==='veil') close(null); }; });
+  return new Promise(res=>{ const close=v=>{ $('#veil').classList.add('hidden'); res(v); }; bind?.(close); $('#veil').onclick=e=>{ if(e.target.id==='veil' && !opt.modal) close(null); }; });
 }
 function confirmDlg(title, msg, ok='OK', danger=false){
   return openSheet(`<h3>${esc(title)}</h3><p>${esc(msg)}</p><div class="grid2"><button class="btn sub" data-a="0">やめる</button><button class="btn ${danger?'red':''}" data-a="1">${esc(ok)}</button></div>`,
@@ -1567,6 +1567,7 @@ $('#btnZoomIn').onclick=()=>setZoom(state.zoom*1.25);
 $('#btnZoomOut').onclick=()=>setZoom(state.zoom/1.25);
 
 $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
+  <button class="opt" data-a="locks"><span>🔑 パスワード<br><span class="s">見守り用（おうちの人）と、子どもごとのパスワード</span></span><span>🔑</span></button>
   <button class="opt" data-a="autoShape"><span>✨ 図形を自動できれいに<br><span class="s">大きめのまる・三角・四角・線と、点を、書き終えたら整えます（文字はそのまま）</span></span><span class="sw2 ${state.settings.autoShape!==false?'on':''}"></span></button>
   <button class="opt" data-a="finger"><span>指でも書く<br><span class="s">オフ：指はスクロール、Apple Pencilだけで書く</span></span><span class="sw2 ${state.settings.fingerDraw?'on':''}"></span></button>
   <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
@@ -1584,11 +1585,12 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
 ).then(a=>menuAction(a));
 
 async function menuAction(a){
-  if(a==='autoShape'){ state.settings.autoShape = state.settings.autoShape===false; saveMeta(); toast(state.settings.autoShape!==false?'✨ 図形を自動で整えます（ペンを止めても整えられます）':'自動では整えません（ペンを止めると整えられます）'); }
+  if(a==='locks'){ await lockSettings(); renderLearners(); }
+  else if(a==='autoShape'){ state.settings.autoShape = state.settings.autoShape===false; saveMeta(); toast(state.settings.autoShape!==false?'✨ 図形を自動で整えます（ペンを止めても整えられます）':'自動では整えません（ペンを止めると整えられます）'); }
   else if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
   else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
   else if(a==='detect') autoDetect();
-  else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスコード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
+  else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスワード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
   else if(a==='rot') openRotBar(false);
   else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
   else if(a==='clearAll'){ if(!state.book) return; if(await confirmDlg('全ページの書き込みを消す', 'この問題集の線をすべて消します。丸つけと記録は残ります。↶で戻せます。', '全部消す', true)) clearStrokes([...state.ink.keys()]); }
@@ -1617,11 +1619,12 @@ function showScreen(s){ if(s!=='main' && typeof ANS!=='undefined' && ANS.open) c
   applyTouchMode(); updUndo();
 }
 function renderLearners(){
-  $('#learners').innerHTML = state.learners.map(l=>`<button class="chip ${l.id===state.learner?'on':''}" data-l="${l.id}">${esc(l.name)}</button>`).join('') + `<button class="chip" data-edit="1">✎ 名前</button>`;
+  $('#learners').innerHTML = state.learners.map(l=>`<button class="chip ${l.id===state.learner?'on':''}" data-l="${l.id}">${state.locks?.kids?.[l.id]?'🔒':''}${esc(l.name)}</button>`).join('') + `<button class="chip" data-edit="1">✎ 名前</button><button class="chip" data-lock="1">🔑 パスワード</button>`;
 }
 $('#learners').onclick=async e=>{
   const b=e.target.closest('button'); if(!b) return;
-  if(b.dataset.l && b.dataset.l!==state.learner){ state.learner=b.dataset.l; saveMeta(); undoMain.length=0; redoMain.length=0; await loadAllForLearner(); renderLearners(); renderLib(); refreshDue(); renderStats(); syncLearnerFromCloud(); }
+  if(b.dataset.lock){ lockSettings().then(renderLearners); return; }
+  if(b.dataset.l && b.dataset.l!==state.learner){ await switchLearner(b.dataset.l); }
   else if(b.dataset.edit){ const me=state.learners.find(l=>l.id===state.learner); const v=await promptDlg('名前を変える', me.name); if(v && v.trim()){ me.name=v.trim().slice(0,12); saveMeta(); Cloud.put('cfg',{kind:'cfg', list:state.learners, updated:Date.now()}); renderLearners(); } }
 };
 async function renderLib(){
@@ -1958,15 +1961,6 @@ function mergeRewards(a,b){
   const newer=(b.updated||0)>(a.updated||0)?b:a;
   return {list:clone(newer.list||DEFAULT_REWARDS), spent:[...sp.values()].sort((x,y)=>x.d-y.d), updated:Math.max(a.updated||0,b.updated||0)};
 }
-async function askPin(msg){
-  if(!state.settings.pin){
-    const v=await promptDlg('おうちの人用のパスコード（4けた）を決めてください','', 'number');
-    if(!v || !/^\d{4}$/.test(v)){ if(v!==null) toast('4けたの数字にしてください'); return false; }
-    state.settings.pin=v; saveMeta(); toast('パスコードを決めました'); return true;
-  }
-  const v=await promptDlg(msg,'','number'); if(v===null) return false;
-  if(v===state.settings.pin) return true; toast('パスコードがちがいます'); return false;
-}
 function openReward(){ showScreen('reward'); renderReward(); }
 function renderReward(){
   const c=coinTotals(); const me=state.learners.find(l=>l.id===state.learner)?.name||'';
@@ -1994,14 +1988,14 @@ function renderReward(){
   $('#rwBody').querySelectorAll('[data-ex]').forEach(b=>b.onclick=async()=>{
     const r=list.find(x=>x.id===b.dataset.ex); if(!r) return;
     if(coinTotals().now<r.cost) return;
-    if(!(await askPin(`「${r.name}」と交換します。おうちの人がパスコードを入れてね`))) return;
+    if(!(await askPin(`「${r.name}」と交換します。おうちの人がパスワードを入れてね`))) return;
     state.rewards.spent.push({id:uid('x'), name:r.name, cost:r.cost, d:Date.now()}); saveRewards();
     sfx('o'); confetti(window.innerWidth/2, window.innerHeight/3); updateCoins(); renderReward();
     toast(`🎁「${r.name}」と交換しました！`, 3000);
   });
 }
 async function editRewards(){
-  if(!(await askPin('おうちの人のパスコードを入れてください'))) return;
+  if(!(await askPin('おうちの人のパスワードを入れてください'))) return;
   const rows=()=>state.rewards.list.map((r,i)=>`<div class="row" style="margin-bottom:8px"><input class="txt" style="flex:1;margin:0" data-n="${i}" value="${esc(r.name)}"><input class="txt" style="width:90px;margin:0" type="number" inputmode="numeric" data-c="${i}" value="${r.cost}"><button class="btn red" data-del="${i}">×</button></div>`).join('');
   const html=()=>`<h3>🔒 ごほうびを決める</h3><div id="rwRows">${rows()}</div>
     <button class="btn sub" id="rwAdd" style="width:100%;margin-bottom:12px">＋ ごほうびを追加</button>
@@ -2081,14 +2075,16 @@ function renderViewBar(){
     (c ? ` ・ 今 <b>${c.p+1}</b>ページ${fresh?'':'（しばらく動きなし）'}` : ' ・ まだ開いていません');
   $('#viewFollow').classList.toggle('on', !!state.viewFollow);
 }
-async function chooseViewLearner(){
+async function chooseViewLearner(already){
   if(Cloud.mode!=='cf'){ toast('見守りは、Cloudflare版で使えます'); return; }
+  if(!already && !(await checkParent())) return;
   const L = await openSheet(`<h3>👀 だれを見守りますか？</h3><p class="note" style="margin-bottom:12px">この端末では書きこめません。子どもが書いた線が、ここにすぐ表示されます。</p>
     <div class="grid2">${state.learners.map(l=>`<button class="btn sub" data-l="${l.id}">${esc(l.name)}</button>`).join('')}</div>`,
     close=>$('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>close(b.dataset.l)));
-  if(L) enterView(L);
+  if(L) await enterView(L, true);
 }
-async function enterView(L){
+async function enterView(L, checked){
+  if(!checked && !(await checkParent())) return;
   state.viewOnly=true; state.viewFollow=true; state.myLearner=state.learner; state.learner=L; state.advTool='hand'; renderAdvTools();
   document.body.classList.add('viewing'); setMemo(false); renderAskBtn();
   await loadAllForLearner(); await syncLearnerFromCloud();
@@ -3381,7 +3377,7 @@ async function openAnswer(){
   if(!state.book) return;
   const a=ansCfg();
   if(!state.viewOnly && state.settings.ansLock && !(ANS.until>Date.now())){
-    if(!(await askPin('答えを見るには、おうちの人のパスコード'))) return;
+    if(!(await askPin('答えを見るには、おうちの人のパスワード'))) return;
     ANS.until=Date.now()+10*60*1000;
   }
   if(a.b===undefined || (a.b===null && !Object.keys(a.map).length && a.start==null)){ if(!(await chooseAnsBook())) return; }
@@ -3681,10 +3677,11 @@ const HELP=[
   ['⭕','丸つけ・復習',`<ul><li>⭕🔺❌ で丸つけ（同じ所をもう一度タップで取り消し）。</li><li>🔲 <b>問題わく</b>があると、間違えた問題だけが🔁復習に出ます。</li><li>❌🔺は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。</li><li>📖 <b>答え</b>：答えのページを横に並べて表示。◀▶で合わせると、そのページの答えとして覚えます。</li></ul>`],
   ['🟥','かくして覚える',`<ul><li>🟥 <b>赤シート</b>：赤い字・「赤シート用」オレンジで書いた字が隠れます。</li><li>⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋でタップすると開く。🙈で全部かくす／開く。</li></ul>`],
   ['🔍','見る・動かす',`<ul><li>2本指で <b>拡大・縮小</b>（10倍まで）・移動。</li><li>✋ <b>見る</b>：指でスクロール。ページ番号をタップで好きなページへ。</li><li>⋯ → 🧰 で道具の列をかくすと、広く使えます。</li></ul>`],
-  ['🪙','コインとごほうび',`<ul><li>丸つけ・復習・勉強時間でコインがたまります。</li><li>🎁 <b>ごほうび</b>と交換するときは、おうちの人のパスコードが必要です。</li></ul>`],
+  ['🪙','コインとごほうび',`<ul><li>丸つけ・復習・勉強時間でコインがたまります。</li><li>🎁 <b>ごほうび</b>と交換するときは、おうちの人のパスワードが必要です。</li></ul>`],
   ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。🧹<b>子の字を消す</b>で、子どもの落書きや書きこみを消せます（子どもの画面からも消え、↶で戻せます）。</li><li>アドバイスを消す：コメント・音声・解説・画像・スタンプの右上の <b>✕</b> をタップ（すぐ出る「↶ もどす」で戻せる）。🧽でなぞっても消せます。道具の列の <b>🗑</b> で、このページのアドバイス／子どもの書きこみをまとめて消せます。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
   ['🎬','解説の録画（おうちの人）',`<ul><li>見守り画面で🎬を選び、説明したい所をタップ。</li><li>🖼 <b>のせる</b>：問題だけ・囲んだ範囲・ページ全体・写真をボードにのせる。</li><li>●で録画開始 → 書きながら話す（最大5分）→ ■ → 確かめて送る。</li></ul>`],
   ['🖨','印刷・保存',`<ul><li>⋯ → <b>🖨 書き出し・印刷</b>：書きこみ入りPDFを保存・印刷。穴うめをオンにすると、紙で解き直す用に。</li><li>⋯ → <b>💾 バックアップ</b>：書きこみだけ／PDFも全部（引っ越し用）。</li><li>⋯ → <b>全ページの書き込みを消す</b> で、何度でも新品から解き直せます。</li></ul>`],
+  ['🔑','パスワード',`<ul><li><b>おうちの人のパスワード</b>：👀見守る・ごほうび・設定に使います。最初に見守るときに決めます。</li><li><b>子どもごとのパスワード</b>：本棚の「🔑 パスワード」で決めると、その子に切りかえるとき・アプリを開いたときに聞かれます。おうちの人のパスワードでも開けます。</li><li>自分専用の端末なら「次から聞かない」をオンにできます（🔑 パスワードからやめられます）。</li><li>おうちの人のパスワードを忘れたら、パスワード画面の「忘れたとき」から、サイトの入り口のパスコードで決めなおせます。</li></ul>`],
   ['🆘','こまったとき',`<ul><li>書けない → 道具の列で✏️が選ばれているか確認。指で書くときは ⋯ →「指で書く」をオン。</li><li>ページが横向き → ⋯ → <b>📐 向きを合わせる</b>。</li><li>すきまのあるページは回転できません（すきまを消してから）。</li><li>通知が来ない → iPhoneの設定 → 通知 → トキノート がオンか確認。</li></ul>`],
 ];
 function showHelp(open){
@@ -3867,20 +3864,133 @@ async function advBulkDelete(){
   }
 }
 
+/* ================= 🔒 パスワード：おうちの人（見守り・ごほうび）と、子どもごと =================
+   家族の端末どうしで同じになるよう、ハッシュ（元に戻せない形）にしてクラウドに保存する。数字そのものは保存しない。 */
+async function hashPin(pin, who){ const b=await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`tokinote|${who}|${pin}`)); return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join(''); }
+async function loadLocks(){ const l=await store.get('meta','locks'); if(l) state.locks={parent:null, kids:{}, ...l}; }
+function saveLocks(){
+  state.locks.updated=Date.now(); store.put('meta','locks', state.locks).catch(()=>{});
+  if(Cloud.db) Cloud.put('locks', {kind:'locks', parent:state.locks.parent, kids:state.locks.kids, updated:state.locks.updated}, true);
+}
+async function syncLocksFromCloud(){
+  if(!Cloud.db) return;
+  let c=null; try{ c=await Cloud.get('locks'); }catch{}
+  if(c && (c.updated||0) > (state.locks.updated||0)){ state.locks={parent:c.parent||null, kids:c.kids||{}, updated:c.updated}; store.put('meta','locks', state.locks).catch(()=>{}); }
+  else if((state.locks.updated||0) > (c?.updated||0)) Cloud.put('locks', {kind:'locks', parent:state.locks.parent, kids:state.locks.kids, updated:state.locks.updated}, true);
+  // 以前のごほうび用パスコード（この端末だけに保存していたもの）を引きつぐ
+  if(state.settings.pin && !state.locks.parent){ state.locks.parent=await hashPin(state.settings.pin,'parent'); saveLocks(); }
+  if(state.settings.pin){ delete state.settings.pin; saveMeta(); }
+}
+// パスワードを入れる画面（数字4〜8けた）
+function pinDlg(title, {trust=null, forgot=false, modal=false, sub=''}={}){
+  return openSheet(`<h3>🔒 ${esc(title)}</h3>${sub?`<p class="note" style="margin-bottom:8px">${sub}</p>`:''}
+    <input class="txt" id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" style="font-size:26px;letter-spacing:.3em;text-align:center">
+    ${trust?`<button class="opt" data-t="1" style="margin-bottom:8px"><span>${esc(trust)}</span><span class="sw2" id="pinTrust"></span></button>`:''}
+    <div class="grid2">${modal?'<span></span>':'<button class="btn sub" data-a="0">やめる</button>'}<button class="btn" data-a="1">OK</button></div>
+    ${forgot?'<button class="opt" data-a="forgot" style="justify-content:center;color:var(--sub);margin-top:6px">パスワードを忘れたとき</button>':''}`,
+    close=>{ const i=$('#pinIn'); let tr=false; setTimeout(()=>i.focus(),60);
+      const ok=()=>close({pin:i.value.trim(), trust:tr});
+      i.onkeydown=e=>{ if(e.key==='Enter') ok(); };
+      $('#sheet [data-t]')?.addEventListener('click', ()=>{ tr=!tr; $('#pinTrust').classList.toggle('on',tr); });
+      $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=> b.dataset.a==='1' ? ok() : close(b.dataset.a==='forgot' ? {forgot:true} : null)); }, {modal});
+}
+async function newPinDlg(title){
+  const a=await pinDlg(title, {sub:'数字4〜8けた'}); if(!a?.pin) return null;
+  if(!/^\d{4,8}$/.test(a.pin)){ toast('数字4〜8けたにしてください'); return null; }
+  const b=await pinDlg('もう一度入れてください'); if(!b) return null;
+  if(b.pin!==a.pin){ toast('2回の入力がちがいました'); return null; }
+  return a.pin;
+}
+async function forgotParent(){
+  if(Cloud.mode!=='cf'){ toast('パスワードを忘れたときは、バックアップから戻すか、データを消して作り直してください', 5000); return false; }
+  const v=await pinDlg('サイトの入り口のパスコードを入れてください', {sub:'トキノートを開くときに入れる4けたです。合っていれば、おうちの人のパスワードを決めなおせます。'}); if(!v?.pin) return false;
+  try{ const r=await api('api/login',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({pin:v.pin})}); if(!r.ok){ toast('パスコードがちがいます'); return false; } }catch{ toast('電波を確かめてください'); return false; }
+  const n=await newPinDlg('新しい、おうちの人のパスワード'); if(!n) return false;
+  state.locks.parent=await hashPin(n,'parent'); saveLocks(); toast('パスワードを決めなおしました'); return true;
+}
+// おうちの人のパスワード（見守り・ごほうび・設定）。まだなければ、ここで決める
+async function askPin(msg, opt={}){
+  await syncLocksFromCloud().catch(()=>{});
+  if(!state.locks.parent){
+    const n=await newPinDlg('おうちの人のパスワードを決めてください'); if(!n) return false;
+    state.locks.parent=await hashPin(n,'parent'); saveLocks(); toast('🔒 おうちの人のパスワードを決めました'); return true;
+  }
+  const r=await pinDlg(msg, {forgot:true, trust:opt.trust||null}); if(!r) return false;
+  if(r.forgot) return forgotParent();
+  if(await hashPin(r.pin,'parent')===state.locks.parent){ if(r.trust) opt.onTrust?.(); return true; }
+  toast('パスワードがちがいます'); return false;
+}
+async function checkParent(msg='見守るには、おうちの人のパスワード'){
+  if(state.settings.parentTrust) return true;
+  return askPin(msg, {trust:'この端末（おうちの人のスマホ）では次から聞かない', onTrust:()=>{ state.settings.parentTrust=true; saveMeta(); }});
+}
+// 子どもごとのパスワード（おうちの人のパスワードでも開ける）
+async function checkKid(L, modal=false){
+  await syncLocksFromCloud().catch(()=>{});
+  const h=state.locks.kids?.[L]; if(!h || state.settings.kidTrust?.[L]) return true;
+  const name=state.learners.find(l=>l.id===L)?.name||'';
+  const r=await pinDlg(`${name} のパスワード`, {trust:`この端末は ${name} 専用（次から聞かない）`, modal, forgot:false}); if(!r) return false;
+  if(await hashPin(r.pin,'kid:'+L)===h || (state.locks.parent && await hashPin(r.pin,'parent')===state.locks.parent)){
+    if(r.trust){ state.settings.kidTrust={...(state.settings.kidTrust||{}), [L]:true}; saveMeta(); } return true;
+  }
+  toast('パスワードがちがいます'); return false;
+}
+async function switchLearner(L){
+  if(L===state.learner) return true;
+  if(!(await checkKid(L))) return false;
+  state.learner=L; saveMeta(); undoMain.length=0; redoMain.length=0; await loadAllForLearner(); renderLearners(); renderLib(); refreshDue(); renderStats(); syncLearnerFromCloud();
+  return true;
+}
+// 起動したとき：今の子どもにパスワードがあれば聞く（ちがう子・見守りも選べる）
+async function ensureLearnerUnlocked(){
+  if(state.viewOnly || state.settings.parentTrust) return;
+  for(let n=0;n<20;n++){
+    if(await checkKid(state.learner, true)) return;
+    const pick=await openSheet(`<h3>👋 だれが使いますか？</h3><div class="grid2">${state.learners.map(l=>`<button class="btn sub" data-l="${l.id}">${state.locks.kids?.[l.id]?'🔒 ':''}${esc(l.name)}</button>`).join('')}</div>
+      ${Cloud.mode==='cf'?'<button class="opt" data-l="__view" style="justify-content:center;margin-top:8px">👀 おうちの人（見守る）</button>':''}`,
+      close=>$('#sheet').querySelectorAll('[data-l]').forEach(b=>b.onclick=()=>close(b.dataset.l)), {modal:true});
+    if(pick==='__view'){ if(await checkParent()){ await chooseViewLearner(true); if(state.viewOnly) return; } continue; }
+    if(pick && pick!==state.learner){ if(await checkKid(pick, true)){ state.learner=pick; saveMeta(); await loadAllForLearner(); renderLearners(); renderLib(); refreshDue(); renderStats(); syncLearnerFromCloud(); return; } }
+  }
+}
+// 設定画面
+async function lockSettings(){
+  if(!(await askPin('パスワードの設定には、おうちの人のパスワード'))) return;
+  for(;;){
+    const k=state.locks.kids||{};
+    const r=await openSheet(`<h3>🔒 パスワード</h3>
+      <button class="opt" data-a="parent"><span>おうちの人のパスワードを変える<br><span class="s">見守り・ごほうび・この設定に使います。子どものパスワードのかわりにも使えます</span></span><span>👀</span></button>
+      ${state.learners.map(l=>`<div class="opt" style="gap:6px"><span style="flex:1">${esc(l.name)}<br><span class="s">${k[l.id]?'🔒 パスワードあり':'パスワードなし（だれでも開ける）'}</span></span>
+        <button class="pill" data-k="${l.id}">${k[l.id]?'変える':'決める'}</button>${k[l.id]?`<button class="pill" data-kx="${l.id}">なくす</button>`:''}</div>`).join('')}
+      <button class="opt" data-a="trust"><span>この端末の「次から聞かない」をやめる<br><span class="s">${state.settings.parentTrust?'おうちの人：聞かない設定 ':''}${Object.keys(state.settings.kidTrust||{}).map(id=>esc(state.learners.find(l=>l.id===id)?.name||'')+'：聞かない設定 ').join('')||'設定なし'}</span></span><span>↺</span></button>
+      <button class="btn" style="width:100%;margin-top:8px" data-a="close">とじる</button>`,
+      close=>$('#sheet').querySelectorAll('[data-a],[data-k],[data-kx]').forEach(b=>b.onclick=()=>close(b.dataset)));
+    if(!r || r.a==='close') return;
+    if(r.a==='parent'){ const n=await newPinDlg('新しい、おうちの人のパスワード'); if(n){ state.locks.parent=await hashPin(n,'parent'); saveLocks(); toast('変えました'); } }
+    else if(r.a==='trust'){ state.settings.parentTrust=false; state.settings.kidTrust={}; saveMeta(); toast('この端末でも、毎回パスワードを聞きます'); }
+    else if(r.k){ const name=state.learners.find(l=>l.id===r.k)?.name||''; const n=await newPinDlg(`${name} のパスワード`); if(n){ state.locks.kids={...k, [r.k]:await hashPin(n,'kid:'+r.k)}; saveLocks(); toast(`🔒 ${name} にパスワードをつけました`); } }
+    else if(r.kx){ const {[r.kx]:_, ...rest}=k; state.locks.kids=rest; saveLocks(); toast('パスワードをなくしました'); }
+  }
+}
+
 /* ================= boot ================= */
 guardStylus($('#pages'));
 async function boot(){
   await initStore();
   const s=await store.get('meta','settings'); if(s) Object.assign(state.settings, s);
   const L=await store.get('meta','learners'); if(L?.list?.length){ state.learners=L.list; state.learner=L.cur||L.list[0].id; }
+  state.locks={parent:null, kids:{}, updated:0}; await loadLocks();
   const z=await store.get('meta','zoom'); if(z) state.zoom=z;
   const t=await store.get('meta','tool'); if(t && TOOLS.some(x=>x[0]===t)) state.tool=t;
   await loadAllForLearner();
   renderCloud(); renderTools(); renderMaskBtn(); showScreen('lib');
   await Cloud.init();            // Cloudflare版なら、ここでパスコード画面が出る
   await renderLib();
-  if(Cloud.db){ await syncCfgFromCloud(); await syncLearnerFromCloud(); renderLib(); pushAllBooksToCloud(); }
+  if(Cloud.db){ await syncCfgFromCloud(); await syncLocksFromCloud(); await syncLearnerFromCloud(); renderLib(); pushAllBooksToCloud(); }
+  else await syncLocksFromCloud();
+  const watching = Cloud.mode==='cf' && new URL(location.href).searchParams.get('watch');
   if(Cloud.mode==='cf'){ try{ await navigator.serviceWorker?.register('/sw.js'); }catch{} await handleQueryOpen(); }
+  if(!watching) await ensureLearnerUnlocked();
 }
 boot();
 </script>
