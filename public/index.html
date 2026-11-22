@@ -176,6 +176,9 @@ input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12
 #viewBar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#fff6db;border-bottom:1px solid #f0d78c;font-size:15px}
 #qBar{position:fixed;left:0;right:0;top:0;z-index:900;padding-top:max(8px,env(safe-area-inset-top));box-shadow:0 2px 8px rgba(0,0,0,.15);display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 12px;background:#ffe7ea;border-bottom:1px solid #f5b5c0;font-size:15px}
 #qBar.hidden{display:none}
+#snapChip{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;pointer-events:none;transition:.2s;z-index:940;display:flex;align-items:center;gap:8px;background:#1d2330;color:#fff;padding:6px 6px 6px 14px;border-radius:999px;font-size:14px;font-weight:700}
+#snapChip.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+#snapChip button{background:#fff;color:#1d2330;border-radius:999px;padding:6px 12px;font-weight:800}
 #scrBadge{position:fixed;left:50%;top:max(10px,env(safe-area-inset-top));transform:translateX(-50%);z-index:950;display:flex;align-items:center;gap:10px;background:#e11d48;color:#fff;padding:8px 10px 8px 16px;border-radius:999px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #scrBadge button{background:#fff;color:#e11d48;border-radius:999px;padding:6px 12px;font-weight:800}
 #scrView{position:fixed;inset:0;z-index:960;background:#111;display:flex;flex-direction:column}
@@ -953,7 +956,7 @@ function onDown(e, el, T){
     touches.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(touches.size>=2){ if(cur && cur.pointerType==='touch') abortCur(); tapC=null; if(state.settings.fingerDraw && !T.ownPinch) pan={...mid(), scroller:T.scroller()}; return; }
   }
-  const tool = T.lecTool ? T.lecTool() : state.viewOnly ? ({apen:'pen', aerase:'eraser', astamp:'astamp', aping:'aping', agap:'gap'}[state.advTool] || 'hand') : T.tool();
+  const tool = T.lecTool ? T.lecTool() : state.viewOnly ? ({apen:'pen', aerase:'eraser', akerase:'eraser', astamp:'astamp', aping:'aping', agap:'gap'}[state.advTool] || 'hand') : T.tool();
   if(state.viewOnly && T===memoT && !['pen','eraser'].includes(tool)){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
   const fingerScroll = e.pointerType==='touch' && !state.settings.fingerDraw;
   if(fingerScroll || tool==='hand'){ tapC={id:e.pointerId,x:e.clientX,y:e.clientY,t:Date.now(),el,T}; return; }
@@ -1001,7 +1004,7 @@ function onMove(e){
     const p=cur.item.p, n0=p.length;
     for(const ev of evs){ const pt=toNorm(ev,cur.el,cur.T); if(Math.hypot(pt.x-p[p.length-3], pt.y-p[p.length-2]) < .7*cur.k) continue; p.push(rnd(pt.x),rnd(pt.y),pressureOf(ev)); }
     // 書き終わりでペンを止めたら、まっすぐ・まるに整える（ペンとマーカー）
-    if(p.length!==n0 || !cur.holdT){ clearTimeout(cur.holdT); const c=cur; cur.holdT=setTimeout(()=>{ if(cur!==c || c.snapped) return; const k=snapShape(c.item); if(k){ c.snapped=true; scheduleLive(); if(state.settings.sound) tone(1500,0,.05,'sine',.06); } }, 650); }
+    if(p.length!==n0 || !cur.holdT){ clearTimeout(cur.holdT); const c=cur; cur.holdT=setTimeout(()=>{ if(cur!==c || c.snapped) return; const k=snapShape(c.item); delete c.item.raw; delete c.item.rawW; if(k){ c.snapped=true; scheduleLive(); if(state.settings.sound) tone(1500,0,.05,'sine',.06); } }, 650); }
     scheduleLive();
     if(cur.T.liveInfo && Cloud.mode==='cf') Live.sendLive({t:'live', L:state.learner, b:state.book?.id, ...cur.T.liveInfo(), item:cur.item});
   } else if(cur.kind==='erase'){ for(const ev of evs) eraseAt(cur, toNorm(ev,cur.el,cur.T)); }
@@ -1023,7 +1026,12 @@ function finishCur(c, cancel, ev){
   clearTimeout(c.holdT);
   if(c.kind==='stroke' && c.T.liveInfo && Cloud.mode==='cf') Live.endLive(c.T.liveInfo());
   try{
-    if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return; c.T.addStroke(c.item); }
+    if(c.kind==='stroke'){ live.remove(); if(cancel && c.pointerType==='touch') return;
+      let auto=null; if(!c.snapped && state.settings.autoShape!==false){ auto=snapShape(c.item, true); }
+      const raw=c.item.raw, rawW=c.item.rawW; delete c.item.raw; delete c.item.rawW;
+      c.T.addStroke(c.item);
+      if(auto && auto!=='点' && raw){ const it=c.item, T=c.T; showSnapChip(auto, ()=>{ it.p=raw; if(rawW) it.w=rawW; bboxCache.delete(it); T.inkRedraw(); T.afterEdit?.(); }); }
+      if(c.snapped) delete c.item.raw; }
     else if(c.kind==='erase'){ if(c.removed.length) c.T.commitErase(c.removed); }
     else if(c.kind==='lasso'){ live.remove(); if(!cancel && c.poly.length>3) c.T.lasso?.(c.poly); }
     else if(c.kind==='tapTool'){ if(cancel || c.moved || c.aborted) return;
@@ -1034,7 +1042,11 @@ function finishCur(c, cancel, ev){
 function abortCur(){ if(!cur) return; if(cur.kind==='tapTool'){ cur=null; return; } if(cur.kind==='stroke' && cur.T.liveInfo && Cloud.mode==='cf') Live.endLive(cur.T.liveInfo()); if(cur.kind==='stroke') live.remove(); if(cur.kind==='rect') cur.rb.remove(); if(cur.kind==='erase' && cur.removed.length) cur.T.commitErase(cur.removed); cur=null; }
 function eraseAt(c, pt){
   const items=c.T.items(); let ch=false;
-  for(let i=items.length-1;i>=0;i--){ const it=items[i]; if(it.k!=='s') continue; if(hitStroke(it.v2?it.it:it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
+  const all=kErasing();
+  for(let i=items.length-1;i>=0;i--){ const it=items[i];
+    if(it.k==='s'){ if(hitStroke(it.v2?it.it:it,pt,ERASE_R)){ items.splice(i,1); c.removed.push(it); ch=true; } }
+    else if(all && (it.k==='tx'||it.k==='st')){ const b=itemBox(it); if(pt.x>=b.x0-ERASE_R && pt.x<=b.x1+ERASE_R && pt.y>=b.y0-ERASE_R && pt.y<=b.y1+ERASE_R){ items.splice(i,1); c.removed.push(it); ch=true; } }
+  }
   if(ch) c.T.inkRedraw();
 }
 const normRect = (x0,y0,x1,y1) => ({x:rnd(Math.min(x0,x1)), y:rnd(Math.min(y0,y1)), w:rnd(Math.abs(x1-x0)), h:rnd(Math.abs(y1-y0))});
@@ -1275,8 +1287,9 @@ function pageTarget(pg){
       pg.liveD = d || null;
     },
     drawLive(ctx,item){ const d=pg.liveD; if(d && d===pg.detail) drawOnPage(ctx,[item],pg.g,detailK(pg),d.rect.x*d.r,d.rect.y*d.r); else drawOnPage(ctx,[item],pg.g,pg.px); },
-    items:()=> state.viewOnly ? getAdv(p).items : getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
-    inkRedraw:()=>{ drawInk(pg); if(state.viewOnly) saveAdv(p); },
+    items:()=> state.viewOnly && !kErasing() ? getAdv(p).items : getInk(p).items, inkCanvas:()=>pg.inkCv, ovEl:()=>pg.ov,
+    inkRedraw:()=>{ drawInk(pg); renderOverlay(pg); if(state.viewOnly && !kErasing()) saveAdv(p); },
+    afterEdit:()=>{ if(!state.viewOnly) saveInk(p); },
     addStroke(item){
       if(state.viewOnly){ // おうちの人のアドバイス
         const a=getAdv(p); a.items.push(item); drawInk(pg); saveAdv(p);
@@ -1290,6 +1303,9 @@ function pageTarget(pg){
                 redo:()=>{ getInk(p).items.push(item); drawInk(pg); saveInk(p); }});
     },
     commitErase(list){
+      if(kErasing()){ parentInkDel(p, list, 'page');
+        pushUndo({undo:()=>{ parentInkAdd(p, list, 'page'); drawInk(pg); renderOverlay(pg); },
+                  redo:()=>{ const r=getInk(p); r.items=r.items.filter(it=>!list.includes(it)); drawInk(pg); renderOverlay(pg); parentInkDel(p, list, 'page'); }}); return; }
       if(state.viewOnly){ saveAdv(p);
         pushUndo({undo:()=>{ getAdv(p).items.push(...list); drawInk(pg); saveAdv(p); },
                   redo:()=>{ const a=getAdv(p); a.items=a.items.filter(it=>!list.includes(it)); drawInk(pg); saveAdv(p); }}); return; }
@@ -1548,6 +1564,7 @@ $('#btnZoomIn').onclick=()=>setZoom(state.zoom*1.25);
 $('#btnZoomOut').onclick=()=>setZoom(state.zoom/1.25);
 
 $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
+  <button class="opt" data-a="autoShape"><span>✨ 図形を自動できれいに<br><span class="s">大きめのまる・三角・四角・線と、点を、書き終えたら整えます（文字はそのまま）</span></span><span class="sw2 ${state.settings.autoShape!==false?'on':''}"></span></button>
   <button class="opt" data-a="finger"><span>指でも書く<br><span class="s">オフ：指はスクロール、Apple Pencilだけで書く</span></span><span class="sw2 ${state.settings.fingerDraw?'on':''}"></span></button>
   <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
   <button class="opt" data-a="detect"><span>🔍 問題を自動で見つける<br><span class="s">問1・(2)・①などから1問ずつのわくを作る</span></span><span>🔍</span></button>
@@ -1564,7 +1581,8 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
 ).then(a=>menuAction(a));
 
 async function menuAction(a){
-  if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
+  if(a==='autoShape'){ state.settings.autoShape = state.settings.autoShape===false; saveMeta(); toast(state.settings.autoShape!==false?'✨ 図形を自動で整えます（ペンを止めても整えられます）':'自動では整えません（ペンを止めると整えられます）'); }
+  else if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
   else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
   else if(a==='detect') autoDetect();
   else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスコード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
@@ -1866,7 +1884,8 @@ dragHandle($('#memoResize'), (b,dx,dy)=>({...b, w:Math.max(220,b.w+dx), h:Math.m
 const memoT={
   getW:()=>memoW, liveInfo:()=>({area: state.viewOnly?'amemo':'memo', p:memoPage}), tool:()=>['pen','marker','eraser','hand'].includes(state.tool)?state.tool:'pen',
   canDraw:()=>state.memoOpen && !!state.book, scroller:()=>$('#memoBody'),
-  items:()=> state.viewOnly ? advMemo(memoPage) : memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
+  items:()=> state.viewOnly && !kErasing() ? advMemo(memoPage) : memoItems(), inkCanvas:()=>memoCv, ovEl:()=>null, inkRedraw:drawMemo,
+  afterEdit:()=>{ if(state.viewOnly) saveAdv(memoPage); else saveInk(memoPage); },
   addStroke(item){ const p=memoPage;
     if(state.viewOnly){ advMemo(p).push(item); drawMemo(); saveAdv(p);
       pushUndo({undo:()=>{ const a=advMemo(p); const j=a.indexOf(item); if(j>=0) a.splice(j,1); saveAdv(p); if(memoPage===p) drawMemo(); },
@@ -1874,6 +1893,9 @@ const memoT={
     pushUndo({undo:()=>{ const a=memoItems(p); const j=a.indexOf(item); if(j>=0) a.splice(j,1); saveInk(p); if(memoPage===p) drawMemo(); },
               redo:()=>{ memoItems(p).push(item); saveInk(p); if(memoPage===p) drawMemo(); }}); },
   commitErase(list){ const p=memoPage;
+    if(kErasing()){ parentInkDel(p, list, 'memo');
+      pushUndo({undo:()=>{ parentInkAdd(p, list, 'memo'); if(memoPage===p) drawMemo(); },
+                redo:()=>{ const r=getInk(p); r.memo=(r.memo||[]).filter(it=>!list.includes(it)); if(memoPage===p) drawMemo(); parentInkDel(p, list, 'memo'); }}); return; }
     if(state.viewOnly){ saveAdv(p);
       pushUndo({undo:()=>{ advMemo(p).push(...list); saveAdv(p); if(memoPage===p) drawMemo(); },
                 redo:()=>{ const a=getAdv(p); a.memo=(a.memo||[]).filter(x=>!list.includes(x)); saveAdv(p); if(memoPage===p) drawMemo(); }}); return; }
@@ -2107,6 +2129,7 @@ async function onLiveMsg(m){
     return;
   }
   if(m.t==='scr'){ scrOnMsg(m); return; }
+  if(m.t==='inkDel'||m.t==='inkAdd'){ applyInkOp(m); return; }
   if(m.t==='curAll'){ state.liveCur={}; for(const c of m.cur||[]) state.liveCur[c.L]=c; const c=state.liveCur[state.learner]; if(state.viewOnly && c) await followTo(c); renderViewBar(); return; }
   if(m.t==='cur'){ (state.liveCur ||= {})[m.L]={...m, at:Date.now()}; if(state.viewOnly && m.L===state.learner) await followTo(m); renderViewBar(); return; }
   if(m.L && m.L!==state.learner) return;
@@ -2258,10 +2281,10 @@ function renderAdvTools(){
   const ICON={hand:'✋',apen:'✍️',atext:'🔤',aimg:'🖼',aaud:'🎤',alec:'🎬',avid:'🎥',astamp:'🌟',agap:'↕️',aping:'👆',aerase:'🧽'};
   const hid=!!state.settings.advHidden; $('#advTools').classList.toggle('min', hid);
   if(hid){ $('#advTools').innerHTML=`<button class="tool on" data-ashow="1">${ICON[t]||'✋'}<small>道具を出す</small></button>`; document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase')); return; }
-  $('#advTools').innerHTML = `<button class="advHide" data-ahide="1">▾ かくす</button><div class="advRow1"><span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す')
+  $('#advTools').innerHTML = `<button class="advHide" data-ahide="1">▾ かくす</button><div class="advRow1"><span class="advlabel">💬 アドバイス</span>` + B('hand','✋','見る') + B('apen','✍️','手書き') + B('atext','🔤','文字') + B('aimg','🖼','画像') + B('aaud','🎤','音声') + B('alec','🎬','解説') + B('avid','🎥','動画') + B('astamp','🌟','スタンプ') + B('agap','↕️','すきま') + B('aping','👆','ここ見て') + B('aerase','🧽','消す') + B('akerase','🧹','子の字を消す')
     + `<button class="tool" data-react="1">👏<small>リアクション</small></button></div><div class="advRow2">` + ADV_COLORS.map(([c,n])=>`<button class="sw ${state.advColor===c?'on':''}" data-ac="${c}" title="${n}" style="background:${c}"></button>`).join('')
     + `<div class="sep"></div><button class="ib" data-u="1">↶</button><button class="ib" data-u="2">↷</button></div>`;
-  document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'));
+  document.body.classList.toggle('fd', state.viewOnly && state.settings.fingerDraw && (t==='apen'||t==='aerase'||t==='akerase'));
 }
 $('#advTools').addEventListener('click', e=>{
   const b=e.target.closest('button'); if(!b) return;
@@ -2269,7 +2292,7 @@ $('#advTools').addEventListener('click', e=>{
   if(b.dataset.ahide||b.dataset.ashow){ state.settings.advHidden=!!b.dataset.ahide; saveMeta(); renderAdvTools(); return; }
   if(b.dataset.at==='astamp'){ pickSticker(true).then(ok=>{ if(ok){ state.advTool='astamp'; renderAdvTools(); toast(`${state.sticker.e} をはりたい場所をタップ`, 2000); } }); return; }
   if(b.dataset.at==='aping') toast('👆 見てほしい場所をタップすると、子どもの画面でそこが光ります', 2600);
-  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
+  if(b.dataset.at){ state.advTool=b.dataset.at; if(b.dataset.at==='aimg' && !state.pendingImg) $('#advImgFile').click(); if(b.dataset.at==='atext') toast('文字をのせたい場所をタップ。のせた文字をタップすると、なおせます', 2600); if(b.dataset.at==='aaud') toast('🎤 音声を置きたい場所をタップすると、録音が始められます', 2600); if(b.dataset.at==='avid') toast('🎥 動画を置きたい場所をタップしてから、動画をえらんでください（60MBまで）', 3000); if(b.dataset.at==='akerase') toast('🧹 子どもの書きこみ（線・文字・スタンプ）をなぞって消します。子どもの画面からも消えます。↶で戻せます', 3200); if(b.dataset.at==='agap') toast('↕️ 書くスペースを入れたい所をタップ（子どもの画面にも入ります）。すきまをタップで広さを変える', 3000); if(b.dataset.at==='alec') toast('🎬 解説を置きたい場所をタップすると、解説ボードが開きます', 2600); renderAdvTools(); }
   else if(b.dataset.ac){ state.advColor=b.dataset.ac; renderAdvTools(); }
   else if(b.dataset.u==='1') doUndo(); else if(b.dataset.u==='2') doRedo();
 });
@@ -3013,19 +3036,70 @@ function showPing(p, x, y){
 
 /* ================= ✍️ 書きやすさ：まっすぐ・まる／➰ 投げ縄／🔤 子どもの文字 ================= */
 // ペンを最後に0.6秒止めると、直線か、まる（だ円）に整える
-function snapShape(item){
-  const p=item.p; if(p.length<9) return false;
-  const xs=[], ys=[]; for(let i=0;i<p.length;i+=3){ xs.push(p[i]); ys.push(p[i+1]); }
-  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
-  let len=0; for(let i=1;i<xs.length;i++) len+=Math.hypot(xs[i]-xs[i-1], ys[i]-ys[i-1]);
-  const gapEnd=Math.hypot(xs[0]-xs[xs.length-1], ys[0]-ys[ys.length-1]);
-  const w=x1-x0, h=y1-y0;
-  if(len>0 && gapEnd < len*.18 && Math.min(w,h) > Math.max(w,h)*.25){
-    const cx=(x0+x1)/2, cy=(y0+y1)/2, rx=w/2, ry=h/2, n=64, out=[];
-    for(let i=0;i<=n;i++){ const a=i/n*Math.PI*2; out.push(rnd(cx+rx*Math.cos(a)), rnd(cy+ry*Math.sin(a)), 50); }
-    item.p=out; return 'まる';
+/* ---------- ✨ 図形をきれいに：線・まる・三角・四角・点を見分ける ---------- */
+// auto=true は書き終えたときの自動判定（文字をこわさないよう、大きめの図形と点だけ）。false はペンを止めたとき（ゆるく判定）
+const SHAPE_MIN=650;   // 自動で整える大きさ（ページ幅の約6.5%）
+function rdp(pts, eps){
+  if(pts.length<3) return pts.slice();
+  let dmax=0, idx=0; const [a,b]=[pts[0],pts[pts.length-1]]; const L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
+  for(let i=1;i<pts.length-1;i++){ const d=Math.abs((b[0]-a[0])*(a[1]-pts[i][1])-(a[0]-pts[i][0])*(b[1]-a[1]))/L; if(d>dmax){ dmax=d; idx=i; } }
+  if(dmax<=eps) return [a,b];
+  const l=rdp(pts.slice(0,idx+1),eps), r=rdp(pts.slice(idx),eps); return l.slice(0,-1).concat(r);
+}
+function recognizeShape(item, auto){
+  const p=item.p; const pts=[]; for(let i=0;i<p.length;i+=3) pts.push([p[i],p[i+1]]);
+  const xs=pts.map(q=>q[0]), ys=pts.map(q=>q[1]);
+  const x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys), w=x1-x0, h=y1-y0, size=Math.max(w,h), diag=Math.hypot(w,h);
+  let len=0; for(let i=1;i<pts.length;i++) len+=Math.hypot(pts[i][0]-pts[i-1][0], pts[i][1]-pts[i-1][1]);
+  // 点
+  if(size < Math.max(60, item.w*1.2) && len < Math.max(140, item.w*3)){
+    const cx=(x0+x1)/2, cy=(y0+y1)/2; return {kind:'点', p:[rnd(cx),rnd(cy),60, rnd(cx)+1,rnd(cy),60], w:Math.max(item.w*1.6, 26)};
   }
-  item.p=[p[0],p[1],50, p[p.length-3],p[p.length-2],50]; return 'まっすぐ';
+  if(pts.length<5) return null;
+  if(auto && size<SHAPE_MIN) return null;
+  const [s,e]=[pts[0],pts[pts.length-1]]; const chord=Math.hypot(e[0]-s[0],e[1]-s[1]);
+  // まっすぐな線
+  let dev=0; for(const q of pts){ const d=Math.abs((e[0]-s[0])*(s[1]-q[1])-(s[0]-q[0])*(e[1]-s[1]))/(chord||1); dev=Math.max(dev,d); }
+  if(chord>len*.85 && dev < chord*(auto?.07:.12)) return {kind:'線', p:[rnd(s[0]),rnd(s[1]),50, rnd(e[0]),rnd(e[1]),50]};
+  const closed = Math.hypot(e[0]-s[0],e[1]-s[1]) < Math.max(len*.2, diag*.22) && Math.min(w,h) > size*.2;
+  if(!closed) return auto ? null : {kind:'線', p:[rnd(s[0]),rnd(s[1]),50, rnd(e[0]),rnd(e[1]),50]};
+  // まる：中心からの距離がそろっているか（楕円として見る）
+  const cx=(x0+x1)/2, cy=(y0+y1)/2, rx=w/2||1, ry=h/2||1;
+  let err=0; for(const q of pts){ const r=Math.hypot((q[0]-cx)/rx,(q[1]-cy)/ry); err+=Math.abs(r-1); } err/=pts.length;
+  // 角の数（閉じた線を折れ線にする）
+  // 閉じた線は、始点から一番遠い点で2つに分けてから折れ線にする
+  let far=0, fd=0; pts.forEach((q,i)=>{ const d=Math.hypot(q[0]-pts[0][0], q[1]-pts[0][1]); if(d>fd){ fd=d; far=i; } });
+  const eps=diag*.07; let poly=rdp(pts.slice(0,far+1), eps).slice(0,-1).concat(rdp(pts.slice(far).concat([pts[0]]), eps));
+  if(poly.length>1 && Math.hypot(poly[0][0]-poly[poly.length-1][0],poly[0][1]-poly[poly.length-1][1])<diag*.12) poly=poly.slice(0,-1);
+  // 近すぎる角をまとめる
+  const v=[]; for(const q of poly){ if(!v.length || Math.hypot(q[0]-v[v.length-1][0],q[1]-v[v.length-1][1])>diag*.12) v.push(q); }
+  if(v.length>2 && Math.hypot(v[0][0]-v[v.length-1][0],v[0][1]-v[v.length-1][1])<diag*.12) v.pop();
+  const ell=()=>{ const out=[], n=72; for(let i=0;i<=n;i++){ const a=i/n*Math.PI*2; out.push(rnd(cx+rx*Math.cos(a)), rnd(cy+ry*Math.sin(a)), 50); } return out; };
+  const polyP=vs=>{ const out=[]; for(const q of vs.concat([vs[0]])) out.push(rnd(q[0]),rnd(q[1]),50); return out; };
+  if(err < (auto?.13:.2) && (v.length>4 || err<.08)){ // ほぼ真円ならそろえる
+    if(Math.abs(w-h) < size*.12){ const r=(rx+ry)/2; return {kind:'まる', p:(()=>{ const out=[]; for(let i=0;i<=72;i++){ const a=i/72*Math.PI*2; out.push(rnd(cx+r*Math.cos(a)), rnd(cy+r*Math.sin(a)), 50); } return out; })()}; }
+    return {kind:'だ円', p:ell()};
+  }
+  if(v.length===3) return {kind:'三角', p:polyP(v)};
+  if(v.length===4){
+    // 辺がほぼ水平・垂直なら、まっすぐな四角に
+    let axis=true; for(let i=0;i<4;i++){ const a=v[i], b=v[(i+1)%4]; const ang=Math.abs(Math.atan2(b[1]-a[1], b[0]-a[0]))%(Math.PI/2); if(Math.min(ang, Math.PI/2-ang) > .2) axis=false; }
+    if(axis) return {kind:'四角', p:polyP([[x0,y0],[x1,y0],[x1,y1],[x0,y1]])};
+    return {kind:'四角', p:polyP(v)};
+  }
+  if(!auto) return err<.3 ? {kind:'まる', p:ell()} : (v.length>=3 && v.length<=6 ? {kind:'多角形', p:polyP(v)} : null);
+  return null;
+}
+function snapShape(item, auto=false){
+  const r=recognizeShape(item, auto); if(!r) return false;
+  item.raw=item.p; item.p=r.p; if(r.w){ item.rawW=item.w; item.w=rnd(r.w); } return r.kind;
+}
+// 自動で整えたあと、すぐ手書きに戻せるボタン
+function showSnapChip(kind, revert){
+  let d=$('#snapChip'); if(!d){ d=document.createElement('div'); d.id='snapChip'; document.body.appendChild(d); }
+  d.innerHTML=`<span>✨ ${kind}に整えました</span><button>手書きにもどす</button>`; d.classList.add('on');
+  d.querySelector('button').onclick=()=>{ revert(); d.classList.remove('on'); };
+  clearTimeout(showSnapChip.t); showSnapChip.t=setTimeout(()=>d.classList.remove('on'), 2600);
 }
 // 投げ縄
 const pip=(poly,x,y)=>{ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const [xi,yi]=poly[i],[xj,yj]=poly[j]; if(((yi>y)!==(yj>y)) && (x<(xj-xi)*(y-yi)/(yj-yi)+xi)) c=!c; } return c; };
@@ -3596,13 +3670,13 @@ $('#rotBar').addEventListener('click', e=>{
 /* ================= ❓ 使い方 ================= */
 const HELP=[
   ['🚀','はじめに',`<ol><li>📚本棚で <b>＋ 問題集のPDFを入れる</b>。</li><li>入れた直後に出る <b>📐 向きを合わせる</b> で、書きやすい向きにする（あとから ⋯ でも変えられます）。</li><li>⋯ → <b>🔍 問題を自動で見つける</b> で、1問ずつのわくを作る（作れないPDFは🔲で囲む）。</li><li>✏️で解いて、⭕🔺❌で丸つけ。間違えた問題は🔁復習に出てきます。</li></ol>`],
-  ['✏️','書く・消す',`<ul><li>✏️ <b>ペン</b>・🖍 <b>マーカー</b>：色をタップで色と太さ。🎨でほかの色。</li><li>線を引いて<b>ペンを止める</b>と、まっすぐな線・まる・四角に整います。</li><li>🧽 <b>消しゴム</b>：なぞった線を消す。↶↷で戻す・やり直し。</li><li>➰ <b>かこむ</b>：囲んだものを動かす・大きさ・複製・消す。</li><li>🔤 <b>文字</b>：タップした所に文字。書いた文字をタップでなおす。</li><li>🌟 <b>スタンプ</b>：好きなスタンプをはる（もう一度タップではがす）。</li></ul>`],
+  ['✏️','書く・消す',`<ul><li>✏️ <b>ペン</b>・🖍 <b>マーカー</b>：色をタップで色と太さ。🎨でほかの色。</li><li>✨ 大きめに書いた<b>まる・三角・四角・線</b>と<b>点</b>は、書き終えると自動できれいになります（文字はそのまま）。すぐ出る「手書きにもどす」で戻せます。⋯ でオフにもできます。</li><li>小さい図形は、書いたあと<b>ペンを止める</b>と整います。</li><li>🧽 <b>消しゴム</b>：なぞった線を消す。↶↷で戻す・やり直し。</li><li>➰ <b>かこむ</b>：囲んだものを動かす・大きさ・複製・消す。</li><li>🔤 <b>文字</b>：タップした所に文字。書いた文字をタップでなおす。</li><li>🌟 <b>スタンプ</b>：好きなスタンプをはる（もう一度タップではがす）。</li></ul>`],
   ['↕️','すきま・メモ',`<ul><li>↕️ <b>すきま</b>：問題と問題のあいだをタップすると、方眼の書くスペースが入ります。すきまをタップで広さ変更・削除。</li><li>📝 <b>メモ</b>：計算用紙。上のつまみで動かし、右下で大きさを変えられます。ページごとに保存。</li></ul>`],
   ['⭕','丸つけ・復習',`<ul><li>⭕🔺❌ で丸つけ（同じ所をもう一度タップで取り消し）。</li><li>🔲 <b>問題わく</b>があると、間違えた問題だけが🔁復習に出ます。</li><li>❌🔺は、すぐ → 3日後 → 1週間後 → 1か月後に出ます。全部⭕で🏆卒業。</li><li>📖 <b>答え</b>：答えのページを横に並べて表示。◀▶で合わせると、そのページの答えとして覚えます。</li></ul>`],
   ['🟥','かくして覚える',`<ul><li>🟥 <b>赤シート</b>：赤い字・「赤シート用」オレンジで書いた字が隠れます。</li><li>⬛ <b>穴うめ</b>：囲んだ所がかくれます。✋でタップすると開く。🙈で全部かくす／開く。</li></ul>`],
   ['🔍','見る・動かす',`<ul><li>2本指で <b>拡大・縮小</b>（10倍まで）・移動。</li><li>✋ <b>見る</b>：指でスクロール。ページ番号をタップで好きなページへ。</li><li>⋯ → 🧰 で道具の列をかくすと、広く使えます。</li></ul>`],
   ['🪙','コインとごほうび',`<ul><li>丸つけ・復習・勉強時間でコインがたまります。</li><li>🎁 <b>ごほうび</b>と交換するときは、おうちの人のパスコードが必要です。</li></ul>`],
-  ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
+  ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。🧹<b>子の字を消す</b>で、子どもの落書きや書きこみを消せます（子どもの画面からも消え、↶で戻せます）。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
   ['🎬','解説の録画（おうちの人）',`<ul><li>見守り画面で🎬を選び、説明したい所をタップ。</li><li>🖼 <b>のせる</b>：問題だけ・囲んだ範囲・ページ全体・写真をボードにのせる。</li><li>●で録画開始 → 書きながら話す（最大5分）→ ■ → 確かめて送る。</li></ul>`],
   ['🖨','印刷・保存',`<ul><li>⋯ → <b>🖨 書き出し・印刷</b>：書きこみ入りPDFを保存・印刷。穴うめをオンにすると、紙で解き直す用に。</li><li>⋯ → <b>💾 バックアップ</b>：書きこみだけ／PDFも全部（引っ越し用）。</li><li>⋯ → <b>全ページの書き込みを消す</b> で、何度でも新品から解き直せます。</li></ul>`],
   ['🆘','こまったとき',`<ul><li>書けない → 道具の列で✏️が選ばれているか確認。指で書くときは ⋯ →「指で書く」をオン。</li><li>ページが横向き → ⋯ → <b>📐 向きを合わせる</b>。</li><li>すきまのあるページは回転できません（すきまを消してから）。</li><li>通知が来ない → iPhoneの設定 → 通知 → トキノート がオンか確認。</li></ul>`],
@@ -3722,6 +3796,31 @@ $('#btnLibScr').onclick=scrLibClick;
 $('#viewScr').onclick=()=>{ SCR.avail.size ? scrLibClick() : toast('いま画面を見せている端末はありません'); };
 // つないだら、見せている端末に名のってもらう
 setTimeout(()=>Live.send({t:'scr', k:'ask'}), 2500);
+
+/* ================= 🧽 子どもの書きこみを、おうちの人が消す ================= */
+// 線にはidがないので、形の特徴で同じものを見分ける
+const itemSig = it => it.id || (it.k==='s' ? `s:${it.p[0]},${it.p[1]}:${it.p.length}:${it.p[it.p.length-3]},${it.p[it.p.length-2]}` : `${it.k}:${it.x},${it.y}:${it.text||it.e||it.m||''}`);
+function parentInkPut(p){
+  const b=state.book.id, L=state.learner, r=getInk(p); r.updated=Date.now();
+  store.put('ink', inkKey(b,p,L), r).catch(()=>{});
+  Cloud.put(`ln_${L}_${b}/ink/p${p}`, {kind:'ink', updated:r.updated, items:r.items, memo:r.memo||[], gaps:r.gaps||[]});
+}
+function parentInkDel(p, list, area){
+  if(!list.length) return;
+  Live.send({t:'inkDel', L:state.learner, b:state.book.id, p, area, sigs:list.map(itemSig)}); parentInkPut(p);
+}
+function parentInkAdd(p, list, area){
+  const r=getInk(p); (area==='memo' ? (r.memo ||= []) : r.items).push(...list);
+  Live.send({t:'inkAdd', L:state.learner, b:state.book.id, p, area, items:list}); parentInkPut(p);
+}
+function applyInkOp(m){
+  if(state.viewOnly || m.L!==state.learner || state.book?.id!==m.b) return;
+  const r=getInk(m.p); const key = m.area==='memo' ? 'memo' : 'items'; r[key] ||= [];
+  if(m.t==='inkDel'){ const set=new Set(m.sigs); const before=r[key].length; r[key]=r[key].filter(it=>!set.has(itemSig(it))); if(r[key].length===before) return; toast('🧽 おうちの人が書きこみを消しました', 2200); }
+  else r[key].push(...(m.items||[]));
+  saveInk(m.p); const pg=state.pages[m.p]; if(pg?.rendered){ drawInk(pg); renderOverlay(pg); } if(m.area==='memo') drawMemo();
+}
+const kErasing = () => state.viewOnly && state.advTool==='akerase';
 
 /* ================= boot ================= */
 guardStylus($('#pages'));
