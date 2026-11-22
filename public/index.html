@@ -164,7 +164,6 @@ body.fd #rvStage{touch-action:none}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid2 .btn{height:56px;font-size:16px}
 input.txt{width:100%;height:50px;border:1.5px solid var(--line);border-radius:12px;padding:0 14px;font-size:18px;margin-bottom:14px;-webkit-user-select:text;user-select:text}
-#login{display:flex;align-items:center;justify-content:center;background:#f3f6fb}
 .pinbox{text-align:center;padding:24px;max-width:420px;width:100%}
 #pinDots{display:flex;gap:16px;justify-content:center;margin:6px 0 10px}
 #pinDots span{width:18px;height:18px;border-radius:50%;border:2px solid var(--accent)}
@@ -390,15 +389,6 @@ body.viewing #tools, body.viewing #btnReview, body.viewing #btnCoin, body.viewin
 
 <section id="rewardScr" class="screen hidden"><div class="wrap" id="rwBody"></div></section>
 
-<section id="login" class="screen hidden" style="z-index:30">
-  <div class="pinbox">
-    <div style="font-size:54px">📚</div><h1 style="margin:6px 0 4px">トキノート</h1>
-    <p class="note" style="margin:0 0 18px">パスコードを入れてください</p>
-    <div id="pinDots"></div><div id="pinMsg"></div>
-    <div class="keys"><button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button><button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button><button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button><span></span><button data-k="0">0</button><button data-k="del" aria-label="1文字けす">⌫</button></div>
-  </div>
-</section>
-
 <section id="lec" class="screen hidden" style="z-index:35;display:flex;flex-direction:column;overflow:hidden">
   <div id="lecBar" class="mhead" style="cursor:default;flex-wrap:wrap;padding:8px 10px"></div>
   <div id="lecWrap" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:0;touch-action:none">
@@ -520,7 +510,7 @@ async function initStore(){
 
 /* ================= cloud ================= */
 // 2つの保存先に対応：
-//  'cf'     … 自分のCloudflare Worker（/api/*）。パスコードでログインし、見守り（リアルタイム）も使える
+//  'cf'     … 自分のCloudflare Worker（/api/*）。入り口のパスコードなし。見守り（リアルタイム）も使える
 //  'claude' … claude.ai アーティファクトのDB（ログイン中ユーザーの非公開領域）
 const api = (path, opt={}) => fetch(path, {credentials:'same-origin', cache:'no-store', ...opt});
 const Cloud = {
@@ -530,8 +520,6 @@ const Cloud = {
     try{
       const r = await withTimeout(api('api/health'), 6000);
       if(r.ok){ const j=await r.json(); if(j.app==='tokinote'){
-        if(!j.configured){ await showSetupNeeded(); return; }
-        if(!j.authed) await showLogin();
         this.mode='cf'; this.db=true; this.set('on'); Live.connect(); return; } }
     }catch{}
     try{
@@ -565,7 +553,6 @@ const Cloud = {
         const c = e?.code;
         if(c==='invalid_argument'){ if(!this.warned.big){ this.warned.big=1; toast('書き込みがとても多いページはクラウドに保存できませんでした（この端末には保存済み）', 6000);} }
         else if(c==='quota_exceeded'){ if(!this.warned.q){ this.warned.q=1; toast('クラウドの保存容量がいっぱいです（この端末には保存済み）', 6000);} }
-        else if(c==='auth'){ if(!this.q.has(path)) this.q.set(path, body); this.busy.delete(path); await showLogin(); }
         else if(['revoked','not_granted','capability_disabled','capability_removed'].includes(c)){ this.db=null; this.set('off'); return; }
         else if(!this.q.has(path)) this.q.set(path, body);
       }finally{ this.busy.delete(path); }
@@ -1572,7 +1559,7 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="finger"><span>指でも書く<br><span class="s">オフ：指はスクロール、Apple Pencilだけで書く</span></span><span class="sw2 ${state.settings.fingerDraw?'on':''}"></span></button>
   <button class="opt" data-a="sound"><span>効果音</span><span class="sw2 ${state.settings.sound?'on':''}"></span></button>
   <button class="opt" data-a="detect"><span>🔍 問題を自動で見つける<br><span class="s">問1・(2)・①などから1問ずつのわくを作る</span></span><span>🔍</span></button>
-  <button class="opt" data-a="ansLock"><span>答えを見るときにパスコード<br><span class="s">オン：📖 答え を開くには、おうちの人のパスコード（10分有効）</span></span><span class="sw2 ${state.settings.ansLock?'on':''}"></span></button>
+  <button class="opt" data-a="ansLock"><span>答えを見るときにパスワード<br><span class="s">オン：📖 答え を開くには、おうちの人のパスワード（10分有効）</span></span><span class="sw2 ${state.settings.ansLock?'on':''}"></span></button>
   <button class="opt" data-a="rot"><span>📐 向きを合わせる<br><span class="s">全ページ／このページを、左右・上下に回す（↶で戻せます）</span></span><span>📐</span></button>
   <button class="opt" data-a="clearPage"><span>このページの書き込みを消す<br><span class="s">丸つけと記録は残ります（↶で戻せます）</span></span><span>🧽</span></button>
   <button class="opt" data-a="clearAll"><span>全ページの書き込みを消す<br><span class="s">問題集を新品に戻して解き直す</span></span><span>📄</span></button>
@@ -1580,7 +1567,7 @@ $('#btnMore').onclick=()=>openSheet(`<h3>メニュー</h3>
   <button class="opt" data-a="backup"><span>💾 バックアップ・引っ越し<br><span class="s">書きこみだけ（軽い）／PDFもふくめて全部／戻す</span></span><span>💾</span></button>
   <button class="opt" data-a="help"><span>使い方</span><span>❓</span></button>
   ${Cloud.mode==='cf'?'<button class="opt" data-a="push"><span>🔔 しつもん通知を受け取る（この端末）<br><span class="s">おうちの人のスマホで設定します</span></span><span>🔔</span></button><button class="opt" data-a="pushtest"><span>🔔 通知のテスト</span><span>📨</span></button>':''}
-  ${Cloud.mode==='cf'?'<button class="opt" data-a="logout"><span>この端末でログアウト<br><span class="s">次に開くときはパスコードが必要です</span></span><span>🔒</span></button>':''}`,
+`,
   close=>$('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=>close(b.dataset.a))
 ).then(a=>menuAction(a));
 
@@ -1590,7 +1577,7 @@ async function menuAction(a){
   else if(a==='finger'){ state.settings.fingerDraw=!state.settings.fingerDraw; applyTouchMode(); saveMeta(); toast(state.settings.fingerDraw?'指でも書けます（2本指でスクロール）':'指はスクロール用。Apple Pencilで書きます'); }
   else if(a==='sound'){ state.settings.sound=!state.settings.sound; saveMeta(); toast(state.settings.sound?'効果音オン':'効果音オフ',1200); }
   else if(a==='detect') autoDetect();
-  else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスワード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスコードで開きます':'答えをすぐ見られます'); }
+  else if(a==='ansLock'){ if(state.settings.ansLock && !(await askPin('切りかえには、おうちの人のパスワード'))) return; state.settings.ansLock=!state.settings.ansLock; saveMeta(); toast(state.settings.ansLock?'答えはパスワードで開きます':'答えをすぐ見られます'); }
   else if(a==='rot') openRotBar(false);
   else if(a==='clearPage'){ if(!state.book) return; if(await confirmDlg('このページの書き込みを消す', `${state.curPage+1}ページ目の線を消します。丸つけと記録は残ります。`, '消す', true)) clearStrokes([state.curPage]); }
   else if(a==='clearAll'){ if(!state.book) return; if(await confirmDlg('全ページの書き込みを消す', 'この問題集の線をすべて消します。丸つけと記録は残ります。↶で戻せます。', '全部消す', true)) clearStrokes([...state.ink.keys()]); }
@@ -1600,7 +1587,6 @@ async function menuAction(a){
   else if(a==='help') showHelp();
   else if(a==='push') setupPush();
   else if(a==='pushtest') testPush();
-  else if(a==='logout'){ if(await confirmDlg('ログアウト','この端末でログアウトします。書き込みはクラウドに残ります。','ログアウト')){ await Cloud.flush(); await api('api/logout',{method:'POST'}).catch(()=>{}); location.reload(); } }
 }
 function clearStrokes(pages){
   const saved=new Map();
@@ -1653,7 +1639,7 @@ async function renderLib(){
   $('#btnLibPush').classList.toggle('hidden', Cloud.mode!=='cf' || !!state.settings.pushOn);
   $('#bookList').innerHTML = h || `<p class="note">まだ問題集がありません。「＋ 問題集のPDFを入れる」から追加してください。</p>`;
   $('#saveNote').innerHTML = Cloud.mode==='cf'
-    ? '書き込み・丸つけ・記録・PDFは、この端末と<b>家族専用のクラウド（Cloudflare）</b>に自動保存されます。別の端末でも、パスコードを入れれば同じ続きから使えます。'
+    ? '書き込み・丸つけ・記録・PDFは、この端末と<b>家族専用のクラウド（Cloudflare）</b>に自動保存されます。別の端末でも、同じアドレスを開けば同じ続きから使えます。'
     : (Cloud.db ? '書き込み・丸つけ・記録は、この端末と<b>クラウド（ログイン中のアカウント）</b>に自動保存されます。' : '書き込み・丸つけ・記録は<b>この端末</b>に保存されます。')
       + ' PDF本体はこの端末だけに保存されます。消えた場合も、同じPDFを入れ直せば書き込みが戻ります。念のため、ときどき ⋯ メニューの「バックアップを保存」をしてください。';
   refreshDue();
@@ -2029,38 +2015,6 @@ async function pushBookToCloud(id, buf){
 async function pushAllBooksToCloud(){
   if(Cloud.mode!=='cf') return;
   for(const id of await store.keys('files')){ if(/^(img|aud|vid)\|/.test(String(id))) continue; if(!(await Cloud.hasPdf(id))) await pushBookToCloud(id); }
-}
-
-/* ================= パスコード画面 ================= */
-let loginP=null;
-function showLogin(){
-  if(loginP) return loginP;
-  const el=$('#login'); el.classList.remove('hidden'); let code='';
-  const dots=()=>{ $('#pinDots').innerHTML=[0,1,2,3].map(i=>`<span class="${i<code.length?'on':''}"></span>`).join(''); };
-  dots(); $('#pinMsg').textContent='';
-  loginP=new Promise(res=>{
-    const submit=async()=>{
-      $('#pinMsg').textContent='たしかめています…';
-      let j={}, st=0; try{ const r=await api('api/login',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({pin:code})}); st=r.status; j=await r.json(); }catch{ j={error:'net'}; }
-      if(j.ok){ el.classList.add('hidden'); loginP=null; res(true); return; }
-      code=''; dots(); el.querySelector('.pinbox').animate([{transform:'translateX(-8px)'},{transform:'translateX(8px)'},{transform:'translateX(0)'}],{duration:240});
-      $('#pinMsg').textContent = j.error==='locked' ? `まちがいが続いたので、${Math.ceil(j.wait/60)}分まってください`
-        : j.error==='locked_today' ? '今日はこれ以上ためせません。あした試してください'
-        : j.error==='net' ? 'つながりません。電波を確かめてください'
-        : j.wait ? `ちがいます。${Math.ceil(j.wait/60)}分まってください` : `ちがいます（あと${j.left}回で、しばらく入れなくなります）`;
-    };
-    el.querySelector('.keys').onclick=e=>{
-      const b=e.target.closest('button'); if(!b) return;
-      if(b.dataset.k==='del'){ code=code.slice(0,-1); dots(); return; }
-      if(code.length>=4) return; code+=b.dataset.k; dots(); if(code.length===4) submit();
-    };
-  });
-  return loginP;
-}
-function showSetupNeeded(){
-  $('#login').classList.remove('hidden');
-  $('#login .pinbox').innerHTML=`<h1>🔧 もう少しで使えます</h1><p class="note" style="font-size:15px">Cloudflareの設定で、Worker「tokinote」のシークレット <b>APP_PIN</b> に4けたのパスコードを登録してください。登録したら、このページを開き直します。</p>`;
-  return new Promise(()=>{});
 }
 
 /* ================= 見守りモード（別の端末で、子どもの画面を見る） ================= */
@@ -3243,7 +3197,7 @@ async function setupPush(){
   if(isIOS() && !isStandalone()){
     await openSheet(`<h3>🔔 先にホーム画面に追加してください</h3>
       <p>iPhone・iPadで通知を受け取るには、トキノートを<b>ホーム画面のアプリ</b>として開く必要があります。</p>
-      <p>1. Safariの下（iPadは上）の <b>共有ボタン（□に↑）</b> をタップ<br>2. <b>「ホーム画面に追加」</b> → 「追加」<br>3. ホーム画面の <b>トキノート</b> から開き、パスコードを入れる<br>4. もう一度 ⋯ →「🔔 しつもん通知を受け取る」</p>
+      <p>1. Safariの下（iPadは上）の <b>共有ボタン（□に↑）</b> をタップ<br>2. <b>「ホーム画面に追加」</b> → 「追加」<br>3. ホーム画面の <b>トキノート</b> から開く<br>4. もう一度 ⋯ →「🔔 しつもん通知を受け取る」</p>
       <button class="btn" style="width:100%" data-a="1">わかった</button>`, close=>$('#sheet [data-a]').onclick=()=>close());
     return;
   }
@@ -3681,7 +3635,7 @@ const HELP=[
   ['🙋','しつもん・見守り',`<ul><li>🙋 <b>しつもん</b>：そのまま／文字／声で、おうちの人のスマホに通知。</li><li>おうちの人は📚本棚の <b>👀 見守る</b> で、書いている様子をリアルタイムで見られます。</li><li>見守り中は、ペン・文字・画像・音声・🎬解説の録画・スタンプ・↕️すきま・👆ここ見て で教えられます。🧹<b>子の字を消す</b>で、子どもの落書きや書きこみを消せます（子どもの画面からも消え、↶で戻せます）。</li><li>アドバイスを消す：コメント・音声・解説・画像・スタンプの右上の <b>✕</b> をタップ（すぐ出る「↶ もどす」で戻せる）。🧽でなぞっても消せます。道具の列の <b>🗑</b> で、このページのアドバイス／子どもの書きこみをまとめて消せます。</li><li>通知を受け取るには、iPhoneでトキノートを<b>ホーム画面に追加</b>してから、本棚の 🔔 を押します。</li></ul>`],
   ['🎬','解説の録画（おうちの人）',`<ul><li>見守り画面で🎬を選び、説明したい所をタップ。</li><li>🖼 <b>のせる</b>：問題だけ・囲んだ範囲・ページ全体・写真をボードにのせる。</li><li>●で録画開始 → 書きながら話す（最大5分）→ ■ → 確かめて送る。</li></ul>`],
   ['🖨','印刷・保存',`<ul><li>⋯ → <b>🖨 書き出し・印刷</b>：書きこみ入りPDFを保存・印刷。穴うめをオンにすると、紙で解き直す用に。</li><li>⋯ → <b>💾 バックアップ</b>：書きこみだけ／PDFも全部（引っ越し用）。</li><li>⋯ → <b>全ページの書き込みを消す</b> で、何度でも新品から解き直せます。</li></ul>`],
-  ['🔑','パスワード',`<ul><li><b>おうちの人のパスワード</b>：👀見守る・ごほうび・設定に使います。最初に見守るときに決めます。</li><li><b>子どもごとのパスワード</b>：本棚の「🔑 パスワード」で決めると、その子に切りかえるとき・アプリを開いたときに聞かれます。おうちの人のパスワードでも開けます。</li><li>自分専用の端末なら「次から聞かない」をオンにできます（🔑 パスワードからやめられます）。</li><li>おうちの人のパスワードを忘れたら、パスワード画面の「忘れたとき」から、サイトの入り口のパスコードで決めなおせます。</li></ul>`],
+  ['🔑','パスワード',`<ul><li><b>おうちの人のパスワード</b>：👀見守る・ごほうび・設定に使います。最初に見守るときに決めます。</li><li><b>子どもごとのパスワード</b>：本棚の「🔑 パスワード」で決めると、その子に切りかえるとき・アプリを開いたときに聞かれます。おうちの人のパスワードでも開けます。</li><li>自分専用の端末なら「次から聞かない」をオンにできます（🔑 パスワードからやめられます）。</li></ul>`],
   ['🆘','こまったとき',`<ul><li>書けない → 道具の列で✏️が選ばれているか確認。指で書くときは ⋯ →「指で書く」をオン。</li><li>ページが横向き → ⋯ → <b>📐 向きを合わせる</b>。</li><li>すきまのあるページは回転できません（すきまを消してから）。</li><li>通知が来ない → iPhoneの設定 → 通知 → トキノート がオンか確認。</li></ul>`],
 ];
 function showHelp(open){
@@ -3882,17 +3836,17 @@ async function syncLocksFromCloud(){
   if(state.settings.pin){ delete state.settings.pin; saveMeta(); }
 }
 // パスワードを入れる画面（数字4〜8けた）
-function pinDlg(title, {trust=null, forgot=false, modal=false, sub=''}={}){
+function pinDlg(title, {trust=null, modal=false, sub=''}={}){
   return openSheet(`<h3>🔒 ${esc(title)}</h3>${sub?`<p class="note" style="margin-bottom:8px">${sub}</p>`:''}
     <input class="txt" id="pinIn" type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" style="font-size:26px;letter-spacing:.3em;text-align:center">
     ${trust?`<button class="opt" data-t="1" style="margin-bottom:8px"><span>${esc(trust)}</span><span class="sw2" id="pinTrust"></span></button>`:''}
     <div class="grid2">${modal?'<span></span>':'<button class="btn sub" data-a="0">やめる</button>'}<button class="btn" data-a="1">OK</button></div>
-    ${forgot?'<button class="opt" data-a="forgot" style="justify-content:center;color:var(--sub);margin-top:6px">パスワードを忘れたとき</button>':''}`,
+`,
     close=>{ const i=$('#pinIn'); let tr=false; setTimeout(()=>i.focus(),60);
       const ok=()=>close({pin:i.value.trim(), trust:tr});
       i.onkeydown=e=>{ if(e.key==='Enter') ok(); };
       $('#sheet [data-t]')?.addEventListener('click', ()=>{ tr=!tr; $('#pinTrust').classList.toggle('on',tr); });
-      $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=> b.dataset.a==='1' ? ok() : close(b.dataset.a==='forgot' ? {forgot:true} : null)); }, {modal});
+      $('#sheet').querySelectorAll('[data-a]').forEach(b=>b.onclick=()=> b.dataset.a==='1' ? ok() : close(null)); }, {modal});
 }
 async function newPinDlg(title){
   const a=await pinDlg(title, {sub:'数字4〜8けた'}); if(!a?.pin) return null;
@@ -3901,13 +3855,6 @@ async function newPinDlg(title){
   if(b.pin!==a.pin){ toast('2回の入力がちがいました'); return null; }
   return a.pin;
 }
-async function forgotParent(){
-  if(Cloud.mode!=='cf'){ toast('パスワードを忘れたときは、バックアップから戻すか、データを消して作り直してください', 5000); return false; }
-  const v=await pinDlg('サイトの入り口のパスコードを入れてください', {sub:'トキノートを開くときに入れる4けたです。合っていれば、おうちの人のパスワードを決めなおせます。'}); if(!v?.pin) return false;
-  try{ const r=await api('api/login',{method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify({pin:v.pin})}); if(!r.ok){ toast('パスコードがちがいます'); return false; } }catch{ toast('電波を確かめてください'); return false; }
-  const n=await newPinDlg('新しい、おうちの人のパスワード'); if(!n) return false;
-  state.locks.parent=await hashPin(n,'parent'); saveLocks(); toast('パスワードを決めなおしました'); return true;
-}
 // おうちの人のパスワード（見守り・ごほうび・設定）。まだなければ、ここで決める
 async function askPin(msg, opt={}){
   await syncLocksFromCloud().catch(()=>{});
@@ -3915,8 +3862,7 @@ async function askPin(msg, opt={}){
     const n=await newPinDlg('おうちの人のパスワードを決めてください'); if(!n) return false;
     state.locks.parent=await hashPin(n,'parent'); saveLocks(); toast('🔒 おうちの人のパスワードを決めました'); return true;
   }
-  const r=await pinDlg(msg, {forgot:true, trust:opt.trust||null}); if(!r) return false;
-  if(r.forgot) return forgotParent();
+  const r=await pinDlg(msg, {trust:opt.trust||null}); if(!r) return false;
   if(await hashPin(r.pin,'parent')===state.locks.parent){ if(r.trust) opt.onTrust?.(); return true; }
   toast('パスワードがちがいます'); return false;
 }
@@ -3929,7 +3875,7 @@ async function checkKid(L, modal=false){
   await syncLocksFromCloud().catch(()=>{});
   const h=state.locks.kids?.[L]; if(!h || state.settings.kidTrust?.[L]) return true;
   const name=state.learners.find(l=>l.id===L)?.name||'';
-  const r=await pinDlg(`${name} のパスワード`, {trust:`この端末は ${name} 専用（次から聞かない）`, modal, forgot:false}); if(!r) return false;
+  const r=await pinDlg(`${name} のパスワード`, {trust:`この端末は ${name} 専用（次から聞かない）`, modal}); if(!r) return false;
   if(await hashPin(r.pin,'kid:'+L)===h || (state.locks.parent && await hashPin(r.pin,'parent')===state.locks.parent)){
     if(r.trust){ state.settings.kidTrust={...(state.settings.kidTrust||{}), [L]:true}; saveMeta(); } return true;
   }
@@ -3984,7 +3930,7 @@ async function boot(){
   const t=await store.get('meta','tool'); if(t && TOOLS.some(x=>x[0]===t)) state.tool=t;
   await loadAllForLearner();
   renderCloud(); renderTools(); renderMaskBtn(); showScreen('lib');
-  await Cloud.init();            // Cloudflare版なら、ここでパスコード画面が出る
+  await Cloud.init();
   await renderLib();
   if(Cloud.db){ await syncCfgFromCloud(); await syncLocksFromCloud(); await syncLearnerFromCloud(); renderLib(); pushAllBooksToCloud(); }
   else await syncLocksFromCloud();

@@ -1,7 +1,7 @@
 // トキノート Cloudflare Worker
 // - 画面（public/）は Workers Static Assets がそのまま配信
-// - /api/* はすべて Durable Object「Family」1つに渡す（家族のデータ・PDF・リアルタイム中継・パスコード認証）
-// 必要な設定：Worker のシークレット APP_PIN（4けた）だけ。セッション用の鍵は DO が自動で作って保存する。
+// - /api/* はすべて Durable Object「Family」1つに渡す（家族のデータ・PDF・リアルタイム中継・通知）
+// 入り口のパスコードはなし。必須の設定もなし（任意：TURN_KEY_ID / TURN_KEY_TOKEN、RESET_PARENT_PASSWORD）
 
 import { DurableObject } from 'cloudflare:workers';
 
@@ -16,8 +16,6 @@ export default {
   },
 };
 
-const COOKIE = 'tk_s';
-const SESSION_DAYS = 180;
 const CHUNK = 1024 * 1024;          // PDFは1MBずつに分けて保存（1行の上限2MBより小さく）
 const MAX_PDF = 95 * 1024 * 1024;   // リクエスト本体の上限（無料プラン100MB）より少し小さく
 
@@ -25,12 +23,6 @@ const json = (obj, status = 200, headers = {}) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...headers } });
 
 const b64url = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-
-function timingSafeEqual(a, b) {
-  if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
-  let r = 0; for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return r === 0;
-}
 
 export class Family extends DurableObject {
   constructor(ctx, env) {
@@ -79,60 +71,23 @@ export class Family extends DurableObject {
   meta(k) { const r = this.sql.exec(`SELECT v FROM meta WHERE k=?`, k).toArray(); return r.length ? r[0].v : null; }
   setMeta(k, v) { this.sql.exec(`INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`, k, v); }
 
-  async hmacKey() {
-    let raw = this.meta('sessionKey');
-    if (!raw) { const k = crypto.getRandomValues(new Uint8Array(32)); raw = b64url(k); this.setMeta('sessionKey', raw); }
-    const bytes = Uint8Array.from(atob(raw.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((raw.length + 3) % 4)), c => c.charCodeAt(0));
-    return crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  }
-  async sign(payload) { const key = await this.hmacKey(); return b64url(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(payload))); }
-  async makeToken() { const exp = Date.now() + SESSION_DAYS * 86400000; const gen = this.meta('sessionGen') || '1'; const p = `${exp}.${gen}`; return `${p}.${await this.sign(p)}`; }
-  async authed(request) {
-    const c = request.headers.get('cookie') || '';
-    const m = c.match(new RegExp(`(?:^|;\\s*)${COOKIE}=([^;]+)`)); if (!m) return false;
-    const [exp, gen, sig] = m[1].split('.'); if (!exp || !gen || !sig) return false;
-    if (+exp < Date.now() || gen !== (this.meta('sessionGen') || '1')) return false;
-    return timingSafeEqual(sig, await this.sign(`${exp}.${gen}`));
-  }
-
-  /* ---------- パスコード：連続でまちがえたら待たせる ---------- */
-  lockState(ip) {
-    const raw = this.meta('fail:' + ip); return raw ? JSON.parse(raw) : { n: 0, until: 0 };
-  }
-  async login(request) {
-    const pin = this.env.APP_PIN;
-    if (!pin || !/^\d{4,8}$/.test(pin)) return json({ ok: false, error: 'not_configured' }, 503);
-    const ip = request.headers.get('cf-connecting-ip') || 'local';
-    const day = new Date().toISOString().slice(0, 10);
-    const g = JSON.parse(this.meta('failDay') || '{}');
-    const now = Date.now();
-    const st = this.lockState(ip);
-    if (st.until > now) return json({ ok: false, error: 'locked', wait: Math.ceil((st.until - now) / 1000) }, 429);
-    if (g.day === day && g.n >= 100) return json({ ok: false, error: 'locked_today' }, 429);
-    let body = {}; try { body = await request.json(); } catch {}
-    if (timingSafeEqual(String(body.pin || ''), pin)) {
-      this.sql.exec(`DELETE FROM meta WHERE k=?`, 'fail:' + ip);
-      const tok = await this.makeToken();
-      return json({ ok: true }, 200, { 'set-cookie': `${COOKIE}=${tok}; Path=/; Max-Age=${SESSION_DAYS * 86400}; HttpOnly; Secure; SameSite=Strict` });
-    }
-    st.n += 1;
-    if (st.n >= 5) st.until = now + Math.min(24 * 3600, 60 * 2 ** (st.n - 5)) * 1000;   // 5回目から1分、2分、4分…（最大1日）
-    this.setMeta('fail:' + ip, JSON.stringify(st));
-    this.setMeta('failDay', JSON.stringify({ day, n: g.day === day ? g.n + 1 : 1 }));
-    return json({ ok: false, error: 'wrong', left: Math.max(0, 5 - st.n), wait: st.until > now ? Math.ceil((st.until - now) / 1000) : 0 }, 401);
+  // おうちの人のパスワードを忘れたとき：Worker の変数 RESET_PARENT_PASSWORD に新しい値（日付など）を入れて保存すると、1回だけ消える
+  resetParentIfAsked() {
+    const want = this.env.RESET_PARENT_PASSWORD; if (!want || this.meta('parentResetDone') === String(want)) return;
+    const r = this.sql.exec(`SELECT val FROM kv WHERE key='locks'`).toArray();
+    let cur = {}; try { cur = r.length ? JSON.parse(r[0].val) : {}; } catch {}
+    const now = Date.now(); const val = JSON.stringify({ kind: 'locks', parent: null, kids: cur.kids || {}, updated: now, reset: now });
+    this.sql.exec(`INSERT INTO kv(key,val,updated) VALUES('locks',?,?) ON CONFLICT(key) DO UPDATE SET val=excluded.val, updated=excluded.updated`, val, now);
+    this.setMeta('parentResetDone', String(want));
   }
 
   /* ---------- 入口 ---------- */
   async fetch(request) {
     const url = new URL(request.url);
     const path = url.pathname;
-    if (path === '/api/health') return json({ app: 'tokinote', v: 1, authed: await this.authed(request), configured: !!this.env.APP_PIN });
-    if (path === '/api/login' && request.method === 'POST') return this.login(request);
-    if (path === '/api/logout' && request.method === 'POST') return json({ ok: true }, 200, { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` });
-    if (!(await this.authed(request))) return json({ ok: false, error: 'auth' }, 401);
-
-    // すべての端末をログアウトさせる（パスコードを変えたとき用）
-    if (path === '/api/logout-all' && request.method === 'POST') { this.setMeta('sessionGen', String(Date.now())); return json({ ok: true }); }
+    // 入り口のパスコードはなし（URLを知っている家族だけが使う前提）。アプリの中の鍵は、おうちの人／子どものパスワード
+    if (path === '/api/health') return json({ app: 'tokinote', v: 2, authed: true, configured: true });
+    this.resetParentIfAsked();
 
     // 🙋 しつもん
     if (path === '/api/q' && request.method === 'POST') {
